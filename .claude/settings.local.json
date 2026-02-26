@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(npm show:*)",
+      "Bash(npm create:*)",
+      "Bash(npx create-electron-vite@latest:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(npx electron-vite:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

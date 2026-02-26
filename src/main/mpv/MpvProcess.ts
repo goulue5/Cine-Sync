@@ -12,8 +12,6 @@ export class MpvProcess {
   }
 
   private _resolveMpvPath(): string {
-    // In packaged app: resources/mpv/mpv.exe
-    // In dev: project root resources/mpv/mpv.exe
     if (app.isPackaged) {
       return path.join(process.resourcesPath, 'mpv', 'mpv.exe')
     }
@@ -41,15 +39,44 @@ export class MpvProcess {
       '--no-osd-bar',
       '--idle=yes',
       '--keep-open=yes',
+      '--force-window=immediate',
+
+      // ── Video output: D3D11 GPU (safe — BaseWindow has zero Chromium) ──
       '--vo=gpu',
       '--gpu-api=d3d11',
-      '--hwdec=auto-safe',
+      '--hwdec=auto-safe',          // hardware decoding (essential for 4K)
+
+      // ── High quality rendering ────────────────────────────────────────
+      '--scale=ewa_lanczossharp',   // high quality upscaling
+      '--dscale=mitchell',          // clean downscaling
+      '--cscale=ewa_lanczossharp',  // chroma upscaling
+      '--deband',                   // remove banding artifacts
+      '--deband-iterations=4',
+      '--deband-threshold=35',
+      '--deband-range=16',
+      '--deband-grain=5',
+
+      // ── Smooth playback ───────────────────────────────────────────────
+      '--video-sync=display-resync',
+
+      // ── HDR ───────────────────────────────────────────────────────────
+      '--tone-mapping=auto',
+      '--target-colorspace-hint=yes',
+
+      // ── DPI ───────────────────────────────────────────────────────────
       '--hidpi-window-scale=no',
     ]
 
     this.process = spawn(this.mpvPath, args, {
       detached: false,
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    this.process.stdout?.on('data', (data: Buffer) => {
+      console.log('[mpv stdout]', data.toString().trim())
+    })
+    this.process.stderr?.on('data', (data: Buffer) => {
+      console.log('[mpv stderr]', data.toString().trim())
     })
 
     this.process.on('error', (err) => {

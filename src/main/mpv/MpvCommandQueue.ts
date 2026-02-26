@@ -44,7 +44,48 @@ export class MpvCommandQueue {
     return this.client.sendCommand(['get_property', name])
   }
 
+  async setProperty(name: string, value: string | number | boolean): Promise<void> {
+    await this.client.sendCommand(['set_property', name, value])
+  }
+
   async observeProperty(id: number, name: string): Promise<void> {
     await this.client.sendCommand(['observe_property', id, name])
+  }
+
+  // ── Track management ────────────────────────────────────────────────────
+
+  async getTrackList(): Promise<unknown> {
+    return this.client.sendCommand(['get_property', 'track-list'])
+  }
+
+  async setAudioTrack(id: number | 'auto' | 'no'): Promise<void> {
+    await this.client.sendCommand(['set_property', 'aid', id])
+  }
+
+  async setSubtitleTrack(id: number | 'auto' | 'no'): Promise<void> {
+    await this.client.sendCommand(['set_property', 'sid', id])
+  }
+
+  async cycleAudioTrack(): Promise<void> {
+    await this.client.sendCommand(['cycle', 'aid'])
+  }
+
+  async cycleSubtitleTrack(): Promise<void> {
+    await this.client.sendCommand(['cycle', 'sid'])
+  }
+
+  // ── Playback options ────────────────────────────────────────────────────
+
+  async setSpeed(speed: number): Promise<void> {
+    const clamped = Math.max(0.25, Math.min(4, speed))
+    await this.client.sendCommand(['set_property', 'speed', clamped])
+  }
+
+  async setSubDelay(seconds: number): Promise<void> {
+    await this.client.sendCommand(['set_property', 'sub-delay', seconds])
+  }
+
+  async setAudioDelay(seconds: number): Promise<void> {
+    await this.client.sendCommand(['set_property', 'audio-delay', seconds])
   }
 }

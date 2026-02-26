@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { usePlayerStore } from '../store/playerStore'
+import { usePlayerStore, MpvTrack } from '../store/playerStore'
 
 interface MpvPropertyChangeEvent {
   event: 'property-change'
@@ -14,9 +14,6 @@ interface MpvGenericEvent {
 
 type MpvEvent = MpvPropertyChangeEvent | MpvGenericEvent
 
-/**
- * Central hook that subscribes to mpv events and keeps the Zustand store in sync.
- */
 export function useMpv(): void {
   const store = usePlayerStore()
 
@@ -47,6 +44,26 @@ export function useMpv(): void {
             break
           case 'eof-reached':
             store.setEofReached(e.data === true)
+            break
+          case 'track-list':
+            if (Array.isArray(e.data)) {
+              store.setTrackList(e.data as MpvTrack[])
+            }
+            break
+          case 'aid':
+            store.setCurrentAid(e.data as number | 'auto' | 'no' | null)
+            break
+          case 'sid':
+            store.setCurrentSid(e.data as number | 'auto' | 'no' | null)
+            break
+          case 'speed':
+            store.setSpeed(typeof e.data === 'number' ? e.data : 1)
+            break
+          case 'sub-delay':
+            store.setSubDelay(typeof e.data === 'number' ? e.data : 0)
+            break
+          case 'audio-delay':
+            store.setAudioDelay(typeof e.data === 'number' ? e.data : 0)
             break
         }
       } else if (event.event === 'start-file') {

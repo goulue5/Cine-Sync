@@ -3,6 +3,15 @@ import { usePlayerStore } from '../../store/playerStore'
 import { SeekBar } from './SeekBar'
 import { VolumeControl } from './VolumeControl'
 
+function SettingsIcon(): React.ReactElement {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+    </svg>
+  )
+}
+
 const MONO: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", monospace',
   letterSpacing: '0.04em',
@@ -50,6 +59,9 @@ function Skip10ForwardIcon(): React.ReactElement {
 export function ControlBar(): React.ReactElement {
   const isPlaying = usePlayerStore(s => s.isPlaying)
   const fileName = usePlayerStore(s => s.fileName)
+  const settingsOpen = usePlayerStore(s => s.settingsOpen)
+  const setSettingsOpen = usePlayerStore(s => s.setSettingsOpen)
+  const speed = usePlayerStore(s => s.speed)
 
   const handleTogglePause = useCallback(() => window.mpvBridge.togglePause(), [])
   const handleBack = useCallback(() => window.mpvBridge.seek(-10, 'relative'), [])
@@ -129,6 +141,33 @@ export function ControlBar(): React.ReactElement {
           </span>
         )}
 
+        {/* Speed indicator */}
+        {Math.abs(speed - 1) > 0.01 && (
+          <span style={{ ...MONO, color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>
+            {speed}x
+          </span>
+        )}
+
+        {/* Settings button */}
+        <button
+          onClick={() => setSettingsOpen(!settingsOpen)}
+          className="flex items-center justify-center rounded-lg transition-colors duration-150"
+          style={{
+            width: '32px', height: '32px', flexShrink: 0, marginLeft: '4px',
+            color: settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+            background: settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.color = settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)'
+            ;(e.currentTarget as HTMLElement).style.background = settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent'
+          }}
+          aria-label="Paramètres"
+          title="Pistes audio, sous-titres, vitesse"
+        >
+          <SettingsIcon />
+        </button>
+
         {/* Open file button */}
         <button
           onClick={async () => {
@@ -138,7 +177,7 @@ export function ControlBar(): React.ReactElement {
             } catch {}
           }}
           className="flex items-center justify-center rounded-lg transition-colors duration-150"
-          style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '8px', flexShrink: 0 }}
+          style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '4px', flexShrink: 0 }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
           aria-label="Ouvrir un fichier"

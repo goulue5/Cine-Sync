@@ -1,18 +1,38 @@
 import { create } from 'zustand'
 
+export interface MpvTrack {
+  id: number
+  type: 'audio' | 'video' | 'sub'
+  title?: string
+  lang?: string
+  codec?: string
+  selected?: boolean
+  default?: boolean
+  external?: boolean
+}
+
 export interface PlayerState {
-  // Playback state
+  // Playback
   isPlaying: boolean
-  timePos: number        // seconds
-  duration: number       // seconds
-  volume: number         // 0–130
+  timePos: number
+  duration: number
+  volume: number
   mute: boolean
   filePath: string | null
   fileName: string | null
   eofReached: boolean
+  speed: number
 
-  // UI state
+  // Tracks
+  trackList: MpvTrack[]
+  currentAid: number | 'auto' | 'no' | null
+  currentSid: number | 'auto' | 'no' | null
+  subDelay: number
+  audioDelay: number
+
+  // UI
   controlsVisible: boolean
+  settingsOpen: boolean
   mpvError: string | null
 
   // Actions
@@ -24,7 +44,14 @@ export interface PlayerState {
   setFilePath: (v: string | null) => void
   setFileName: (v: string | null) => void
   setEofReached: (v: boolean) => void
+  setSpeed: (v: number) => void
+  setTrackList: (v: MpvTrack[]) => void
+  setCurrentAid: (v: number | 'auto' | 'no' | null) => void
+  setCurrentSid: (v: number | 'auto' | 'no' | null) => void
+  setSubDelay: (v: number) => void
+  setAudioDelay: (v: number) => void
   setControlsVisible: (v: boolean) => void
+  setSettingsOpen: (v: boolean) => void
   setMpvError: (v: string | null) => void
 }
 
@@ -37,7 +64,14 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   filePath: null,
   fileName: null,
   eofReached: false,
+  speed: 1,
+  trackList: [],
+  currentAid: null,
+  currentSid: null,
+  subDelay: 0,
+  audioDelay: 0,
   controlsVisible: true,
+  settingsOpen: false,
   mpvError: null,
 
   setIsPlaying: (v) => set({ isPlaying: v }),
@@ -48,6 +82,13 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setFilePath: (v) => set({ filePath: v }),
   setFileName: (v) => set({ fileName: v }),
   setEofReached: (v) => set({ eofReached: v }),
+  setSpeed: (v) => set({ speed: v ?? 1 }),
+  setTrackList: (v) => set({ trackList: v ?? [] }),
+  setCurrentAid: (v) => set({ currentAid: v }),
+  setCurrentSid: (v) => set({ currentSid: v }),
+  setSubDelay: (v) => set({ subDelay: v ?? 0 }),
+  setAudioDelay: (v) => set({ audioDelay: v ?? 0 }),
   setControlsVisible: (v) => set({ controlsVisible: v }),
+  setSettingsOpen: (v) => set({ settingsOpen: v }),
   setMpvError: (v) => set({ mpvError: v }),
 }))

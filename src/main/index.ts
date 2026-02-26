@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, globalShortcut, dialog, ipcMain } from 'electron'
+import { app, BaseWindow, BrowserWindow, shell, globalShortcut, dialog, ipcMain } from 'electron'
 import { join } from 'path'
 import { getHwnd } from './window'
 import { MpvProcess } from './mpv/MpvProcess'
@@ -6,38 +6,31 @@ import { MpvIpcClient } from './mpv/MpvIpcClient'
 import { MpvCommandQueue } from './mpv/MpvCommandQueue'
 import { registerMainHandlers, unregisterMainHandlers } from './ipc/mainHandlers'
 
-// ── Electron security baseline ──────────────────────────────────────────────
-app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors')
+// Disable Chromium GPU compositor so mainWin transparency works cleanly
+app.disableHardwareAcceleration()
 
 const mpvProcess = new MpvProcess()
 let ipcClient: MpvIpcClient | null = null
 
 async function createWindow(): Promise<void> {
   // ═══════════════════════════════════════════════════════════════════════════
-  // TWO-WINDOW ARCHITECTURE:
-  //   videoWin (opaque, black) — mpv renders here via --wid=<HWND>
-  //   mainWin  (transparent)   — React overlay sits on top
+  // videoWin = BaseWindow (NO Chromium at all → zero D3D11 conflict)
+  //   → mpv can use --vo=gpu --gpu-api=d3d11 freely for max quality
   //
-  // mainWin is an "owned window" of videoWin via setParentWindow(),
-  // which guarantees mainWin is ALWAYS above videoWin on Windows.
-  // Transparent areas of mainWin reveal mpv's video underneath.
+  // mainWin = BrowserWindow (transparent overlay)
+  //   → React UI, transparent areas show mpv video through
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── 1. Video host window (mpv renders here) ─────────────────────────────
-  const videoWin = new BrowserWindow({
+  const videoWin = new BaseWindow({
     width: 1280,
     height: 720,
     minWidth: 640,
     minHeight: 360,
     frame: false,
     show: false,
-    backgroundColor: '#000000',
     title: 'LecteurFilm',
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
   })
-  videoWin.loadURL('about:blank')
 
-  // ── 2. UI overlay window (transparent React shell) ──────────────────────
   const mainWin = new BrowserWindow({
     width: 1280,
     height: 720,
@@ -46,6 +39,7 @@ async function createWindow(): Promise<void> {
     frame: false,
     show: false,
     transparent: true,
+    backgroundColor: '#00000000',
     skipTaskbar: true,
     hasShadow: false,
     webPreferences: {
@@ -56,10 +50,10 @@ async function createWindow(): Promise<void> {
     },
   })
 
-  // ── 3. Z-order: mainWin always above videoWin ───────────────────────────
+  // @ts-expect-error BaseWindow is compatible at runtime
   mainWin.setParentWindow(videoWin)
 
-  // ── 4. Position/size sync ───────────────────────────────────────────────
+  // ── Position sync ───────────────────────────────────────────────────────
   let syncing = false
 
   function syncVideoToMain(): void {
@@ -68,7 +62,6 @@ async function createWindow(): Promise<void> {
     videoWin.setBounds(mainWin.getBounds())
     setTimeout(() => { syncing = false }, 30)
   }
-
   function syncMainToVideo(): void {
     if (syncing || mainWin.isDestroyed() || videoWin.isDestroyed()) return
     syncing = true
@@ -76,49 +69,35 @@ async function createWindow(): Promise<void> {
     setTimeout(() => { syncing = false }, 30)
   }
 
-  // Main window drag → video follows
   mainWin.on('move', syncVideoToMain)
   mainWin.on('resize', syncVideoToMain)
-
-  // Taskbar/snap interaction affects videoWin → sync to main
   videoWin.on('move', syncMainToVideo)
   videoWin.on('resize', syncMainToVideo)
 
-  // Minimize / maximize / restore sync
   videoWin.on('minimize', () => { if (!mainWin.isDestroyed()) mainWin.minimize() })
   videoWin.on('restore', () => {
-    if (!mainWin.isDestroyed()) {
-      mainWin.restore()
-      mainWin.focus()
-    }
+    if (!mainWin.isDestroyed()) { mainWin.restore(); mainWin.focus() }
   })
   videoWin.on('maximize', () => { if (!mainWin.isDestroyed()) mainWin.maximize() })
   videoWin.on('unmaximize', () => { if (!mainWin.isDestroyed()) mainWin.unmaximize() })
+  videoWin.on('focus', () => { if (!mainWin.isDestroyed()) mainWin.focus() })
 
-  // Clicking taskbar icon focuses videoWin → redirect focus to mainWin
-  videoWin.on('focus', () => {
-    if (!mainWin.isDestroyed()) mainWin.focus()
-  })
-
-  // ── 5. Window control IPC (since frame: false) ─────────────────────────
+  // ── Window controls ─────────────────────────────────────────────────────
   ipcMain.handle('window:minimize', () => videoWin.minimize())
   ipcMain.handle('window:maximize', () => {
-    if (videoWin.isMaximized()) {
-      videoWin.unmaximize()
-    } else {
-      videoWin.maximize()
-    }
+    if (videoWin.isMaximized()) videoWin.unmaximize()
+    else videoWin.maximize()
   })
   ipcMain.handle('window:close', () => videoWin.close())
 
-  // ── 6. DevTools (dev only) ──────────────────────────────────────────────
+  // ── DevTools ────────────────────────────────────────────────────────────
   if (!app.isPackaged) {
     globalShortcut.register('CommandOrControl+Shift+I', () => {
       mainWin?.webContents.toggleDevTools()
     })
   }
 
-  // ── 7. File dialog ──────────────────────────────────────────────────────
+  // ── File dialog ─────────────────────────────────────────────────────────
   ipcMain.handle('dialog:openFile', async () => {
     const result = await dialog.showOpenDialog(mainWin, {
       title: 'Ouvrir une vidéo',
@@ -135,28 +114,26 @@ async function createWindow(): Promise<void> {
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
 
-  // External links
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  // ── 8. Load renderer ───────────────────────────────────────────────────
+  // ── Load renderer ───────────────────────────────────────────────────────
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWin.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWin.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // ── 9. Start mpv after renderer loads ───────────────────────────────────
+  // ── Start mpv ───────────────────────────────────────────────────────────
   mainWin.webContents.once('did-finish-load', async () => {
     videoWin.show()
     mainWin.show()
     mainWin.focus()
 
     if (!mpvProcess.checkExists()) {
-      console.warn('[main] mpv.exe not found')
-      console.warn(`[main] Expected at: ${mpvProcess.getMpvPath()}`)
+      console.warn('[main] mpv.exe not found at:', mpvProcess.getMpvPath())
       mainWin.webContents.send('mpv:error', {
         type: 'mpv-not-found',
         path: mpvProcess.getMpvPath(),
@@ -165,7 +142,6 @@ async function createWindow(): Promise<void> {
     }
 
     try {
-      // HWND from videoWin (not mainWin — mpv renders into video window)
       const hwnd = getHwnd(videoWin)
       mpvProcess.spawn(hwnd)
 
@@ -187,7 +163,7 @@ async function createWindow(): Promise<void> {
     }
   })
 
-  // ── 10. Lifecycle ───────────────────────────────────────────────────────
+  // ── Lifecycle ───────────────────────────────────────────────────────────
   mainWin.on('closed', () => {
     unregisterMainHandlers()
     ipcClient?.destroy()

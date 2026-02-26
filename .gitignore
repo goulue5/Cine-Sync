@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+.DS_Store
+
+# mpv binary — download separately, place in resources/mpv/ before building
+# See README for download link
+resources/mpv/mpv.exe
+resources/mpv/*.dll

@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+/* Range input — hide native styling, we render custom track */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+}

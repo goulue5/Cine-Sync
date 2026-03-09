@@ -1,35 +1,59 @@
-import { app, BaseWindow, BrowserWindow, shell, globalShortcut, dialog, ipcMain } from 'electron'
+import { app, BaseWindow, BrowserWindow, shell, globalShortcut, dialog, ipcMain, screen } from 'electron'
 import { join } from 'path'
-import { getHwnd } from './window'
+import { getNativeViewHandle } from './window'
 import { MpvProcess } from './mpv/MpvProcess'
 import { MpvIpcClient } from './mpv/MpvIpcClient'
 import { MpvCommandQueue } from './mpv/MpvCommandQueue'
-import { registerMainHandlers, unregisterMainHandlers } from './ipc/mainHandlers'
+import { registerMainHandlers, setupObservers, unregisterMainHandlers } from './ipc/mainHandlers'
+import { loadResumeStore } from './resumeStore'
+import { DisplayInfo } from './mpv/displayProfile'
+import {
+  startMpvWindowSync,
+} from './macOS/mpvWindowSync'
+
+const IS_MAC = process.platform === 'darwin'
+const IS_WIN = process.platform === 'win32'
 
 // Disable Chromium GPU compositor so mainWin transparency works cleanly
-app.disableHardwareAcceleration()
+// On macOS with embedded mpv, we keep HW acceleration for proper layer compositing
+if (IS_WIN) {
+  app.disableHardwareAcceleration()
+}
+
+// Load saved playback positions
+loadResumeStore()
 
 const mpvProcess = new MpvProcess()
 let ipcClient: MpvIpcClient | null = null
 
+// Track macOS window sync cleanup
+let stopMpvSync: (() => void) | null = null
+
 async function createWindow(): Promise<void> {
   // ═══════════════════════════════════════════════════════════════════════════
-  // videoWin = BaseWindow (NO Chromium at all → zero D3D11 conflict)
-  //   → mpv can use --vo=gpu --gpu-api=d3d11 freely for max quality
+  // Windows: videoWin (BaseWindow) + mainWin (transparent overlay)
+  //   → mpv embeds via --wid into videoWin, mainWin is a child overlay
   //
-  // mainWin = BrowserWindow (transparent overlay)
-  //   → React UI, transparent areas show mpv video through
+  // macOS: mainWin (transparent, always-on-top) + mpv borderless window behind
+  //   → Accessibility API syncs mpv window position to match mainWin
+  //
+  // Linux: mainWin only (fallback — mpv creates its own window)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const videoWin = new BaseWindow({
-    width: 1280,
-    height: 720,
-    minWidth: 640,
-    minHeight: 360,
-    frame: false,
-    show: false,
-    title: 'LecteurFilm',
-  })
+  let videoWin: BaseWindow | null = null
+
+  if (IS_WIN) {
+    videoWin = new BaseWindow({
+      width: 1280,
+      height: 720,
+      minWidth: 640,
+      minHeight: 360,
+      frame: false,
+      show: false,
+      hasShadow: false,
+      title: 'Cine-Sync',
+    })
+  }
 
   const mainWin = new BrowserWindow({
     width: 1280,
@@ -40,8 +64,8 @@ async function createWindow(): Promise<void> {
     show: false,
     transparent: true,
     backgroundColor: '#00000000',
-    skipTaskbar: true,
-    hasShadow: false,
+    skipTaskbar: IS_WIN && !!videoWin,
+    hasShadow: IS_MAC, // Keep shadow on macOS since it's the only window
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -50,45 +74,52 @@ async function createWindow(): Promise<void> {
     },
   })
 
-  // @ts-expect-error BaseWindow is compatible at runtime
-  mainWin.setParentWindow(videoWin)
+  // ── Platform-specific window setup ──────────────────────────────────────
 
-  // ── Position sync ───────────────────────────────────────────────────────
-  let syncing = false
+  if (videoWin && IS_WIN) {
+    // Windows: native parent-child relationship
+    // @ts-expect-error BaseWindow is compatible at runtime
+    mainWin.setParentWindow(videoWin)
 
-  function syncVideoToMain(): void {
-    if (syncing || mainWin.isDestroyed() || videoWin.isDestroyed()) return
-    syncing = true
-    videoWin.setBounds(mainWin.getBounds())
-    setTimeout(() => { syncing = false }, 30)
+    let syncing = false
+
+    function syncVideoToMain(): void {
+      if (syncing || mainWin.isDestroyed() || videoWin!.isDestroyed()) return
+      syncing = true
+      videoWin!.setBounds(mainWin.getBounds())
+      setTimeout(() => { syncing = false }, 30)
+    }
+    function syncMainToVideo(): void {
+      if (syncing || mainWin.isDestroyed() || videoWin!.isDestroyed()) return
+      syncing = true
+      mainWin.setBounds(videoWin!.getBounds())
+      setTimeout(() => { syncing = false }, 30)
+    }
+
+    mainWin.on('move', syncVideoToMain)
+    mainWin.on('resize', syncVideoToMain)
+    videoWin.on('move', syncMainToVideo)
+    videoWin.on('resize', syncMainToVideo)
+
+    videoWin.on('minimize', () => { if (!mainWin.isDestroyed()) mainWin.minimize() })
+    videoWin.on('restore', () => {
+      if (!mainWin.isDestroyed()) { mainWin.restore(); mainWin.focus() }
+    })
+    videoWin.on('maximize', () => { if (!mainWin.isDestroyed()) mainWin.maximize() })
+    videoWin.on('unmaximize', () => { if (!mainWin.isDestroyed()) mainWin.unmaximize() })
+    videoWin.on('focus', () => { if (!mainWin.isDestroyed()) mainWin.focus() })
   }
-  function syncMainToVideo(): void {
-    if (syncing || mainWin.isDestroyed() || videoWin.isDestroyed()) return
-    syncing = true
-    mainWin.setBounds(videoWin.getBounds())
-    setTimeout(() => { syncing = false }, 30)
-  }
-
-  mainWin.on('move', syncVideoToMain)
-  mainWin.on('resize', syncVideoToMain)
-  videoWin.on('move', syncMainToVideo)
-  videoWin.on('resize', syncMainToVideo)
-
-  videoWin.on('minimize', () => { if (!mainWin.isDestroyed()) mainWin.minimize() })
-  videoWin.on('restore', () => {
-    if (!mainWin.isDestroyed()) { mainWin.restore(); mainWin.focus() }
-  })
-  videoWin.on('maximize', () => { if (!mainWin.isDestroyed()) mainWin.maximize() })
-  videoWin.on('unmaximize', () => { if (!mainWin.isDestroyed()) mainWin.unmaximize() })
-  videoWin.on('focus', () => { if (!mainWin.isDestroyed()) mainWin.focus() })
+  // macOS: single window — no special window setup needed
 
   // ── Window controls ─────────────────────────────────────────────────────
-  ipcMain.handle('window:minimize', () => videoWin.minimize())
+  const controlTarget = videoWin ?? mainWin
+
+  ipcMain.handle('window:minimize', () => controlTarget.minimize())
   ipcMain.handle('window:maximize', () => {
-    if (videoWin.isMaximized()) videoWin.unmaximize()
-    else videoWin.maximize()
+    if (controlTarget.isMaximized()) controlTarget.unmaximize()
+    else controlTarget.maximize()
   })
-  ipcMain.handle('window:close', () => videoWin.close())
+  ipcMain.handle('window:close', () => controlTarget.close())
 
   // ── DevTools ────────────────────────────────────────────────────────────
   if (!app.isPackaged) {
@@ -119,21 +150,23 @@ async function createWindow(): Promise<void> {
     return { action: 'deny' }
   })
 
-  // ── Load renderer ───────────────────────────────────────────────────────
+  // ── Load renderer ─────────────────────────────────────────────────────
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWin.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWin.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // ── Start mpv ───────────────────────────────────────────────────────────
+  // ── Start mpv ─────────────────────────────────────────────────────────
   mainWin.webContents.once('did-finish-load', async () => {
-    videoWin.show()
+    if (videoWin) {
+      videoWin.show()
+    }
     mainWin.show()
     mainWin.focus()
 
     if (!mpvProcess.checkExists()) {
-      console.warn('[main] mpv.exe not found at:', mpvProcess.getMpvPath())
+      console.warn('[main] mpv not found at:', mpvProcess.getMpvPath())
       mainWin.webContents.send('mpv:error', {
         type: 'mpv-not-found',
         path: mpvProcess.getMpvPath(),
@@ -141,16 +174,67 @@ async function createWindow(): Promise<void> {
       return
     }
 
-    try {
-      const hwnd = getHwnd(videoWin)
-      mpvProcess.spawn(hwnd)
+    // ── Register handlers BEFORE connecting ──────────────────────────
+    ipcClient = new MpvIpcClient()
+    const cmdQueue = new MpvCommandQueue(ipcClient)
+    registerMainHandlers(mainWin, ipcClient, cmdQueue)
 
-      ipcClient = new MpvIpcClient()
+    try {
+      // ── Detect display for quality optimization ─────────────────────
+      const primary = screen.getPrimaryDisplay()
+      const displayInfo: DisplayInfo = {
+        widthPx: primary.size.width * primary.scaleFactor,
+        heightPx: primary.size.height * primary.scaleFactor,
+        scaleFactor: primary.scaleFactor,
+        refreshRate: primary.displayFrequency,
+        colorSpace: primary.colorSpace,
+        colorDepth: primary.colorDepth,
+        depthPerComponent: primary.depthPerComponent,
+      }
+      console.log('[main] detected display:', JSON.stringify(displayInfo))
+
+      // ── Spawn mpv ─────────────────────────────────────────────────────
+      if (IS_WIN && videoWin) {
+        // Windows: embed into BaseWindow via HWND
+        const wid = getNativeViewHandle(videoWin)
+        mpvProcess.spawn({ wid, displayInfo })
+      } else if (IS_MAC) {
+        // macOS: borderless mpv window synced via Accessibility API
+        const bounds = mainWin.getBounds()
+        const geometry = `${bounds.width}x${bounds.height}+${bounds.x}+${bounds.y}`
+        mpvProcess.spawn({ geometry, displayInfo })
+
+        // Make Electron overlay float above mpv
+        mainWin.setAlwaysOnTop(true, 'floating')
+
+        // Start position sync once mpv has a PID
+        const pid = mpvProcess.pid
+        if (pid) {
+          stopMpvSync = startMpvWindowSync(mainWin, pid)
+        } else {
+          console.warn('[main] macOS: mpv PID not available for window sync')
+        }
+      } else {
+        // Linux fallback — standalone mpv window
+        mpvProcess.spawn({ displayInfo })
+      }
+
       await ipcClient.connect()
+      ipcClient.enableAutoReconnect()
       console.log('[main] mpv IPC connected')
 
-      const cmdQueue = new MpvCommandQueue(ipcClient)
-      registerMainHandlers(mainWin, ipcClient, cmdQueue)
+      // Re-register observers on reconnection
+      ipcClient.on('reconnected', async () => {
+        console.log('[main] re-registering observers after reconnect')
+        try {
+          await setupObservers(ipcClient!, cmdQueue, mainWin)
+        } catch (err) {
+          console.error('[main] failed to re-setup observers:', err)
+        }
+      })
+
+      await setupObservers(ipcClient, cmdQueue, mainWin)
+      console.log('[main] mpv observers registered')
 
       ipcClient.on('error', (err) => console.error('[main] mpv IPC error:', err))
       ipcClient.on('close', () => console.log('[main] mpv IPC closed'))
@@ -163,16 +247,19 @@ async function createWindow(): Promise<void> {
     }
   })
 
-  // ── Lifecycle ───────────────────────────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────────────────────
   mainWin.on('closed', () => {
+    if (stopMpvSync) stopMpvSync()
     unregisterMainHandlers()
     ipcClient?.destroy()
     mpvProcess.kill()
-    if (!videoWin.isDestroyed()) videoWin.close()
+    if (videoWin && !videoWin.isDestroyed()) videoWin.close()
   })
-  videoWin.on('closed', () => {
-    if (!mainWin.isDestroyed()) mainWin.close()
-  })
+  if (videoWin) {
+    videoWin.on('closed', () => {
+      if (!mainWin.isDestroyed()) mainWin.close()
+    })
+  }
 }
 
 app.whenReady().then(createWindow)

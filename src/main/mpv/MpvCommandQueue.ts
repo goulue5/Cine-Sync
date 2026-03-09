@@ -88,4 +88,10 @@ export class MpvCommandQueue {
   async setAudioDelay(seconds: number): Promise<void> {
     await this.client.sendCommand(['set_property', 'audio-delay', seconds])
   }
+
+  // ── Subtitles ─────────────────────────────────────────────────────────────
+
+  async addSubtitle(filePath: string): Promise<void> {
+    await this.client.sendCommand(['sub-add', filePath, 'auto'])
+  }
 }

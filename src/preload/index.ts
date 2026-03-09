@@ -21,13 +21,22 @@ const mpvBridge = {
   setAudioTrack: (id: number | 'auto' | 'no') => ipcRenderer.invoke('mpv:setAudioTrack', id),
   setSubtitleTrack: (id: number | 'auto' | 'no') => ipcRenderer.invoke('mpv:setSubtitleTrack', id),
 
+  // Subtitles
+  addSubtitle: (filePath: string) => ipcRenderer.invoke('mpv:addSubtitle', filePath),
+  openSubtitleFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openSubtitle'),
+
   // Playback options
   setSpeed: (speed: number) => ipcRenderer.invoke('mpv:setSpeed', speed),
   setSubDelay: (seconds: number) => ipcRenderer.invoke('mpv:setSubDelay', seconds),
   setAudioDelay: (seconds: number) => ipcRenderer.invoke('mpv:setAudioDelay', seconds),
 
-  // File dialog
+  // Resume playback
+  getResumePosition: (filePath: string): Promise<number | null> =>
+    ipcRenderer.invoke('mpv:getResumePosition', filePath),
+
+  // File dialogs
   openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
+  openFiles: (): Promise<string[]> => ipcRenderer.invoke('dialog:openFiles'),
 
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
@@ -44,6 +53,11 @@ const mpvBridge = {
     const handler = (_: Electron.IpcRendererEvent, error: unknown) => cb(error)
     ipcRenderer.on('mpv:error', handler)
     return () => ipcRenderer.removeListener('mpv:error', handler)
+  },
+  onMpvResumed: (cb: (data: { position: number }) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { position: number }) => cb(data)
+    ipcRenderer.on('mpv:resumed', handler)
+    return () => ipcRenderer.removeListener('mpv:resumed', handler)
   },
 }
 

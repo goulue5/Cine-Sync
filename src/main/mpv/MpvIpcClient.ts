@@ -2,9 +2,13 @@ import * as net from 'net'
 import { EventEmitter } from 'events'
 import { MpvMessage, isMpvEvent, isMpvResponse } from './mpvTypes'
 
-const PIPE_PATH = '\\\\.\\pipe\\mpvsocket'
+const PIPE_PATH = process.platform === 'win32'
+  ? '\\\\.\\pipe\\mpvsocket'
+  : '/tmp/mpvsocket'
 const CONNECT_TIMEOUT_MS = 5000
 const RETRY_INTERVAL_MS = 100
+const RECONNECT_ATTEMPTS = 10
+const RECONNECT_INTERVAL_MS = 1000
 
 export class MpvIpcClient extends EventEmitter {
   private socket: net.Socket | null = null
@@ -14,6 +18,13 @@ export class MpvIpcClient extends EventEmitter {
     resolve: (data: unknown) => void
     reject: (err: Error) => void
   }>()
+  private _autoReconnect = false
+  private _reconnecting = false
+  private _destroyed = false
+
+  get connected(): boolean {
+    return this.socket !== null && !this.socket.destroyed
+  }
 
   async connect(): Promise<void> {
     const deadline = Date.now() + CONNECT_TIMEOUT_MS
@@ -28,6 +39,10 @@ export class MpvIpcClient extends EventEmitter {
     }
 
     throw new Error(`mpv IPC pipe not available after ${CONNECT_TIMEOUT_MS}ms`)
+  }
+
+  enableAutoReconnect(): void {
+    this._autoReconnect = true
   }
 
   private _tryConnect(): Promise<void> {
@@ -73,7 +88,39 @@ export class MpvIpcClient extends EventEmitter {
 
     socket.on('close', () => {
       this.emit('close')
+      // Reject all pending requests
+      for (const [id, pending] of this.pendingRequests) {
+        pending.reject(new Error('mpv IPC connection closed'))
+        this.pendingRequests.delete(id)
+      }
+      if (this._autoReconnect && !this._reconnecting && !this._destroyed) {
+        this._tryReconnect()
+      }
     })
+  }
+
+  private async _tryReconnect(): Promise<void> {
+    this._reconnecting = true
+    this.emit('disconnected')
+    console.log('[MpvIpcClient] attempting reconnection...')
+
+    for (let attempt = 0; attempt < RECONNECT_ATTEMPTS; attempt++) {
+      if (this._destroyed) break
+      try {
+        await new Promise(r => setTimeout(r, RECONNECT_INTERVAL_MS))
+        await this._tryConnect()
+        this._reconnecting = false
+        console.log('[MpvIpcClient] reconnected')
+        this.emit('reconnected')
+        return
+      } catch {
+        console.log(`[MpvIpcClient] reconnect attempt ${attempt + 1}/${RECONNECT_ATTEMPTS} failed`)
+      }
+    }
+
+    this._reconnecting = false
+    console.error('[MpvIpcClient] reconnection failed after all attempts')
+    this.emit('reconnect-failed')
   }
 
   private _handleMessage(msg: MpvMessage): void {
@@ -124,6 +171,8 @@ export class MpvIpcClient extends EventEmitter {
   }
 
   destroy(): void {
+    this._destroyed = true
+    this._autoReconnect = false
     if (this.socket) {
       this.socket.destroy()
       this.socket = null

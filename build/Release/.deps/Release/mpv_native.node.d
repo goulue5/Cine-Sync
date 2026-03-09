@@ -1,0 +1,1 @@
+cmd_Release/mpv_native.node := c++ -bundle -undefined dynamic_lookup -Wl,-search_paths_first -mmacosx-version-min=10.15 -arch arm64 -L./Release -stdlib=libc++  -o Release/mpv_native.node Release/obj.target/mpv_native/src/main/native/mpv_native.o -framework Cocoa -framework ApplicationServices

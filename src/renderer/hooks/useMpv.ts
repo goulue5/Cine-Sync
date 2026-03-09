@@ -44,6 +44,13 @@ export function useMpv(): void {
             break
           case 'eof-reached':
             store.setEofReached(e.data === true)
+            // Auto-play next in playlist when EOF is reached
+            if (e.data === true) {
+              const { playlist, playlistIndex } = usePlayerStore.getState()
+              if (playlistIndex < playlist.length - 1) {
+                store.playNext()
+              }
+            }
             break
           case 'track-list':
             if (Array.isArray(e.data)) {
@@ -65,10 +72,16 @@ export function useMpv(): void {
           case 'audio-delay':
             store.setAudioDelay(typeof e.data === 'number' ? e.data : 0)
             break
+          case 'path':
+            store.setFilePath(typeof e.data === 'string' ? e.data : null)
+            break
         }
       } else if (event.event === 'start-file') {
         store.setEofReached(false)
         store.setTimePos(0)
+        store.setIsLoading(true)
+      } else if (event.event === 'file-loaded') {
+        store.setIsLoading(false)
       }
     })
 
@@ -81,10 +94,14 @@ export function useMpv(): void {
       }
     })
 
+    const cleanupResumed = window.mpvBridge.onMpvResumed((data) => {
+      console.log(`[useMpv] resumed at ${data.position}s`)
+    })
+
     return () => {
       cleanup()
       cleanupError()
+      cleanupResumed()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }

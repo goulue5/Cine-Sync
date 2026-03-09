@@ -13,6 +13,7 @@ function trackLabel(t: MpvTrack): string {
   if (t.lang) parts.push(t.lang.toUpperCase())
   if (t.codec) parts.push(t.codec)
   if (parts.length === 0) parts.push(`Piste ${t.id}`)
+  if (t.external) parts.push('(ext)')
   return parts.join(' · ')
 }
 
@@ -84,6 +85,17 @@ export function SettingsPanel(): React.ReactElement {
     window.mpvBridge.setAudioDelay(Math.round((audioDelay + delta) * 10) / 10)
   }, [audioDelay])
 
+  const handleLoadSubtitle = useCallback(async () => {
+    try {
+      const path = await window.mpvBridge.openSubtitleFile()
+      if (path) {
+        await window.mpvBridge.addSubtitle(path)
+      }
+    } catch (err) {
+      console.error('[SettingsPanel] failed to load subtitle:', err)
+    }
+  }, [])
+
   return (
     <div
       style={{
@@ -142,6 +154,41 @@ export function SettingsPanel(): React.ReactElement {
             onClick={() => handleSubTrack(t.id)}
           />
         ))}
+        {/* Load external subtitle */}
+        <button
+          onClick={handleLoadSubtitle}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            width: '100%',
+            textAlign: 'left',
+            padding: '7px 10px',
+            borderRadius: '4px',
+            border: '1px dashed rgba(255,255,255,0.15)',
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.4)',
+            fontSize: '11px',
+            cursor: 'pointer',
+            marginTop: '4px',
+            ...MONO,
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'
+            ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.25)'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'
+            ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.15)'
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Charger un fichier de sous-titres
+        </button>
       </Section>
 
       {/* Speed */}

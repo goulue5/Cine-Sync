@@ -8,7 +8,17 @@
       "Bash(npm install:*)",
       "Bash(node:*)",
       "Bash(npx electron-vite:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(brew install:*)",
+      "Bash(/opt/homebrew/bin/mpv:*)",
+      "WebSearch",
+      "Bash(npm run:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:man.archlinux.org)",
+      "WebFetch(domain:manpages.debian.org)",
+      "WebFetch(domain:www.macscripter.net)",
+      "WebFetch(domain:daringfireball.net)",
+      "WebFetch(domain:www.galvanist.com)"
     ]
   }
 }

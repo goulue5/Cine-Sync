@@ -8,7 +8,13 @@
     "build": "electron-vite build",
     "dist": "npm run build && electron-builder --win",
     "dist:portable": "npm run build && electron-builder --win portable",
+    "dist:mac": "npm run build && electron-builder --mac",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "build:native": "node-gyp rebuild --runtime=electron --target=$(node -e \"console.log(require('electron/package.json').version)\") --arch=$(node -e \"console.log(process.arch)\") --dist-url=https://electronjs.org/headers",
+    "rebuild": "npx @electron/rebuild",
     "preview": "electron-vite preview"
   },
   "dependencies": {
@@ -18,6 +24,8 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
@@ -26,8 +34,13 @@
     "electron": "^34.0.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^3.0.0",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "node-gyp": "^12.2.0",
+    "prettier": "^3.8.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
     "vite": "^6.0.0"
   },
   "build": {
@@ -43,13 +56,25 @@
       {
         "from": "./resources/mpv/",
         "to": "mpv/",
-        "filter": ["mpv.exe"]
+        "filter": [
+          "mpv.exe"
+        ]
       }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -60,6 +85,32 @@
     },
     "portable": {
       "artifactName": "LecteurFilm-portable-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   }
 }

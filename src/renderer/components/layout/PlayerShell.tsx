@@ -39,6 +39,20 @@ export function PlayerShell(): React.ReactElement {
     }
   }, [fileName, setControlsVisible, showControls])
 
+  // ── Scroll wheel → volume ─────────────────────────────────────────────────
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 5 : -5
+    const newVol = Math.max(0, Math.min(130, usePlayerStore.getState().volume + delta))
+    window.mpvBridge.setVolume(newVol)
+    showControls()
+  }, [showControls])
+
+  // ── Double-click → fullscreen ─────────────────────────────────────────────
+  const handleDoubleClick = useCallback(() => {
+    window.mpvBridge.windowMaximize()
+  }, [])
+
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -53,12 +67,12 @@ export function PlayerShell(): React.ReactElement {
           break
         case 'ArrowRight':
           e.preventDefault()
-          window.mpvBridge.seek(5, 'relative')
+          window.mpvBridge.seek(e.shiftKey ? 30 : 5, 'relative')
           showControls()
           break
         case 'ArrowLeft':
           e.preventDefault()
-          window.mpvBridge.seek(-5, 'relative')
+          window.mpvBridge.seek(e.shiftKey ? -30 : -5, 'relative')
           showControls()
           break
         case 'ArrowUp':
@@ -77,6 +91,16 @@ export function PlayerShell(): React.ReactElement {
         case 'KeyF':
           window.mpvBridge.windowMaximize()
           break
+        case 'KeyN':
+          // Next in playlist
+          usePlayerStore.getState().playNext()
+          showControls()
+          break
+        case 'KeyP':
+          // Previous in playlist
+          usePlayerStore.getState().playPrev()
+          showControls()
+          break
         case 'Escape':
           if (settingsOpen) setSettingsOpen(false)
           break
@@ -92,6 +116,8 @@ export function PlayerShell(): React.ReactElement {
       className="fixed inset-0 overflow-hidden"
       onMouseMove={showControls}
       onMouseEnter={showControls}
+      onWheel={handleWheel}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Black background — ONLY when no video is loaded */}
       {!fileName && (

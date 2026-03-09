@@ -22,6 +22,11 @@ export interface PlayerState {
   fileName: string | null
   eofReached: boolean
   speed: number
+  isLoading: boolean
+
+  // Playlist
+  playlist: string[]
+  playlistIndex: number
 
   // Tracks
   trackList: MpvTrack[]
@@ -45,6 +50,7 @@ export interface PlayerState {
   setFileName: (v: string | null) => void
   setEofReached: (v: boolean) => void
   setSpeed: (v: number) => void
+  setIsLoading: (v: boolean) => void
   setTrackList: (v: MpvTrack[]) => void
   setCurrentAid: (v: number | 'auto' | 'no' | null) => void
   setCurrentSid: (v: number | 'auto' | 'no' | null) => void
@@ -53,9 +59,15 @@ export interface PlayerState {
   setControlsVisible: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
   setMpvError: (v: string | null) => void
+
+  // Playlist actions
+  loadPlaylist: (files: string[], startIndex?: number) => void
+  playNext: () => void
+  playPrev: () => void
+  playIndex: (index: number) => void
 }
 
-export const usePlayerStore = create<PlayerState>((set) => ({
+export const usePlayerStore = create<PlayerState>((set, get) => ({
   isPlaying: false,
   timePos: 0,
   duration: 0,
@@ -65,6 +77,9 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   fileName: null,
   eofReached: false,
   speed: 1,
+  isLoading: false,
+  playlist: [],
+  playlistIndex: 0,
   trackList: [],
   currentAid: null,
   currentSid: null,
@@ -83,6 +98,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setFileName: (v) => set({ fileName: v }),
   setEofReached: (v) => set({ eofReached: v }),
   setSpeed: (v) => set({ speed: v ?? 1 }),
+  setIsLoading: (v) => set({ isLoading: v }),
   setTrackList: (v) => set({ trackList: v ?? [] }),
   setCurrentAid: (v) => set({ currentAid: v }),
   setCurrentSid: (v) => set({ currentSid: v }),
@@ -91,4 +107,37 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setControlsVisible: (v) => set({ controlsVisible: v }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setMpvError: (v) => set({ mpvError: v }),
+
+  // ── Playlist actions ────────────────────────────────────────────────────
+  loadPlaylist: (files, startIndex = 0) => {
+    if (files.length === 0) return
+    set({ playlist: files, playlistIndex: startIndex, isLoading: true })
+    window.mpvBridge.loadFile(files[startIndex])
+  },
+
+  playNext: () => {
+    const { playlist, playlistIndex } = get()
+    if (playlistIndex < playlist.length - 1) {
+      const next = playlistIndex + 1
+      set({ playlistIndex: next, isLoading: true })
+      window.mpvBridge.loadFile(playlist[next])
+    }
+  },
+
+  playPrev: () => {
+    const { playlist, playlistIndex } = get()
+    if (playlistIndex > 0) {
+      const prev = playlistIndex - 1
+      set({ playlistIndex: prev, isLoading: true })
+      window.mpvBridge.loadFile(playlist[prev])
+    }
+  },
+
+  playIndex: (index) => {
+    const { playlist } = get()
+    if (index >= 0 && index < playlist.length) {
+      set({ playlistIndex: index, isLoading: true })
+      window.mpvBridge.loadFile(playlist[index])
+    }
+  },
 }))

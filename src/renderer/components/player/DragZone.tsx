@@ -1,16 +1,27 @@
 import React, { useState, useCallback, useRef } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
 
-const SUPPORTED_EXTENSIONS = new Set([
+const SUPPORTED_VIDEO_EXTENSIONS = new Set([
   '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm',
   '.m4v', '.ts', '.m2ts', '.mts', '.mpg', '.mpeg', '.ogv',
 ])
 
-function isSupportedFile(filePath: string): boolean {
+const SUPPORTED_SUBTITLE_EXTENSIONS = new Set([
+  '.srt', '.ass', '.ssa', '.sub', '.vtt', '.idx', '.sup', '.smi',
+])
+
+function getExtension(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
-  if (dot === -1) return false
-  const ext = filePath.substring(dot).toLowerCase()
-  return SUPPORTED_EXTENSIONS.has(ext)
+  if (dot === -1) return ''
+  return filePath.substring(dot).toLowerCase()
+}
+
+function isVideoFile(filePath: string): boolean {
+  return SUPPORTED_VIDEO_EXTENSIONS.has(getExtension(filePath))
+}
+
+function isSubtitleFile(filePath: string): boolean {
+  return SUPPORTED_SUBTITLE_EXTENSIONS.has(getExtension(filePath))
 }
 
 export function DragZone(): React.ReactElement {
@@ -18,45 +29,58 @@ export function DragZone(): React.ReactElement {
   const [loadError, setLoadError] = useState<string | null>(null)
   const fileName = usePlayerStore(s => s.fileName)
   const mpvError = usePlayerStore(s => s.mpvError)
+  const loadPlaylist = usePlayerStore(s => s.loadPlaylist)
   const dragCounter = useRef(0)
 
-  const loadFile = useCallback(async (filePath: string) => {
-    console.log('[DragZone] drop received, path:', filePath)
+  const handleFiles = useCallback(async (files: { path: string; name: string }[]) => {
     setLoadError(null)
 
-    if (!filePath) {
-      const msg = 'Chemin du fichier introuvable (file.path undefined)'
-      console.error('[DragZone]', msg)
-      setLoadError(msg)
-      return
+    const videoPaths: string[] = []
+    const subtitlePaths: string[] = []
+
+    for (const file of files) {
+      const filePath = file.path || file.name
+      if (!filePath) continue
+
+      if (isVideoFile(filePath)) {
+        videoPaths.push(filePath)
+      } else if (isSubtitleFile(filePath)) {
+        subtitlePaths.push(filePath)
+      }
     }
 
-    if (!isSupportedFile(filePath)) {
-      const msg = `Format non supporté : ${filePath}`
-      console.warn('[DragZone]', msg)
-      setLoadError(msg)
-      return
+    // Load subtitle files
+    for (const subPath of subtitlePaths) {
+      try {
+        await window.mpvBridge.addSubtitle(subPath)
+        console.log('[DragZone] subtitle added:', subPath)
+      } catch (err) {
+        console.error('[DragZone] failed to add subtitle:', err)
+        setLoadError(`Erreur sous-titre: ${String(err)}`)
+      }
     }
 
-    try {
-      await window.mpvBridge.loadFile(filePath)
-      console.log('[DragZone] loadFile IPC OK')
-    } catch (err) {
-      const msg = `Erreur IPC: ${String(err)}`
-      console.error('[DragZone]', msg)
-      setLoadError(msg)
+    // Load video files as playlist
+    if (videoPaths.length > 0) {
+      loadPlaylist(videoPaths)
+    } else if (subtitlePaths.length === 0) {
+      // No supported files found
+      const names = files.map(f => f.name || f.path).join(', ')
+      setLoadError(`Format non supporté : ${names}`)
     }
-  }, [])
+  }, [loadPlaylist])
 
   const handleOpenDialog = useCallback(async () => {
     setLoadError(null)
     try {
-      const filePath = await window.mpvBridge.openFile()
-      if (filePath) await loadFile(filePath)
+      const paths = await window.mpvBridge.openFiles()
+      if (paths.length > 0) {
+        loadPlaylist(paths)
+      }
     } catch (err) {
       setLoadError(`Erreur dialog: ${String(err)}`)
     }
-  }, [loadFile])
+  }, [loadPlaylist])
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -79,16 +103,16 @@ export function DragZone(): React.ReactElement {
     e.preventDefault()
     dragCounter.current = 0
     setIsDragOver(false)
-    const files = Array.from(e.dataTransfer.files)
-    console.log('[DragZone] files count:', files.length)
-    if (files.length > 0) {
-      const file = files[0]
-      // Electron adds .path to File objects (full filesystem path)
-      const filePath = (file as File & { path?: string }).path ?? ''
-      console.log('[DragZone] file.name:', file.name, '| file.path:', filePath)
-      loadFile(filePath || file.name)
+
+    const droppedFiles = Array.from(e.dataTransfer.files).map(file => ({
+      path: (file as File & { path?: string }).path ?? '',
+      name: file.name,
+    }))
+
+    if (droppedFiles.length > 0) {
+      handleFiles(droppedFiles)
     }
-  }, [loadFile])
+  }, [handleFiles])
 
   const dragHandlers = {
     onDragEnter: handleDragEnter,
@@ -262,7 +286,7 @@ export function DragZone(): React.ReactElement {
               transition: 'color 0.2s',
             }}
           >
-            {isDragOver ? 'Relâchez ici' : 'ou glissez un fichier · MKV · MP4 · AVI'}
+            {isDragOver ? 'Relâchez ici' : 'ou glissez des fichiers · MKV · MP4 · AVI · SRT · ASS'}
           </p>
         </div>
       )}

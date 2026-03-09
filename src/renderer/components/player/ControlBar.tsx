@@ -22,7 +22,6 @@ const MONO: React.CSSProperties = {
 function PlayIcon(): React.ReactElement {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-      {/* Slightly offset for optical centering */}
       <path d="M7.5 4.5v15L20 12z" />
     </svg>
   )
@@ -32,6 +31,23 @@ function PauseIcon(): React.ReactElement {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
       <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+    </svg>
+  )
+}
+
+function PrevIcon(): React.ReactElement {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+    </svg>
+  )
+}
+
+function NextIcon(): React.ReactElement {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6 18l8.5-6L6 6v12zm2.5-6l8.5 6V6z" transform="translate(-2, 0)" />
+      <path d="M16 6h2v12h-2z" />
     </svg>
   )
 }
@@ -62,10 +78,27 @@ export function ControlBar(): React.ReactElement {
   const settingsOpen = usePlayerStore(s => s.settingsOpen)
   const setSettingsOpen = usePlayerStore(s => s.setSettingsOpen)
   const speed = usePlayerStore(s => s.speed)
+  const playlist = usePlayerStore(s => s.playlist)
+  const playlistIndex = usePlayerStore(s => s.playlistIndex)
+  const playNext = usePlayerStore(s => s.playNext)
+  const playPrev = usePlayerStore(s => s.playPrev)
+  const loadPlaylist = usePlayerStore(s => s.loadPlaylist)
+
+  const hasPrev = playlistIndex > 0
+  const hasNext = playlistIndex < playlist.length - 1
 
   const handleTogglePause = useCallback(() => window.mpvBridge.togglePause(), [])
   const handleBack = useCallback(() => window.mpvBridge.seek(-10, 'relative'), [])
   const handleForward = useCallback(() => window.mpvBridge.seek(10, 'relative'), [])
+
+  const handleOpenFiles = useCallback(async () => {
+    try {
+      const paths = await window.mpvBridge.openFiles()
+      if (paths.length > 0) {
+        loadPlaylist(paths)
+      }
+    } catch { /* dialog cancelled */ }
+  }, [loadPlaylist])
 
   return (
     <div className="w-full flex flex-col" style={{ padding: '0 20px 18px' }}>
@@ -76,6 +109,25 @@ export function ControlBar(): React.ReactElement {
 
       {/* Controls row */}
       <div className="flex items-center">
+
+        {/* ── Prev button ── */}
+        {playlist.length > 1 && (
+          <button
+            onClick={playPrev}
+            disabled={!hasPrev}
+            className="flex items-center justify-center rounded-lg transition-colors duration-150"
+            style={{
+              width: '30px', height: '30px',
+              color: hasPrev ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)',
+              cursor: hasPrev ? 'pointer' : 'default',
+            }}
+            onMouseEnter={e => { if (hasPrev) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' } }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = hasPrev ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+            aria-label="Piste précédente"
+          >
+            <PrevIcon />
+          </button>
+        )}
 
         {/* ── Playback cluster ── */}
         <div className="flex items-center" style={{ gap: '2px' }}>
@@ -122,6 +174,25 @@ export function ControlBar(): React.ReactElement {
           </button>
         </div>
 
+        {/* ── Next button ── */}
+        {playlist.length > 1 && (
+          <button
+            onClick={playNext}
+            disabled={!hasNext}
+            className="flex items-center justify-center rounded-lg transition-colors duration-150"
+            style={{
+              width: '30px', height: '30px',
+              color: hasNext ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)',
+              cursor: hasNext ? 'pointer' : 'default',
+            }}
+            onMouseEnter={e => { if (hasNext) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' } }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = hasNext ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+            aria-label="Piste suivante"
+          >
+            <NextIcon />
+          </button>
+        )}
+
         {/* Volume — left of center */}
         <div style={{ marginLeft: '8px' }}>
           <VolumeControl />
@@ -129,6 +200,16 @@ export function ControlBar(): React.ReactElement {
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Playlist position */}
+        {playlist.length > 1 && (
+          <span
+            className="text-xs"
+            style={{ ...MONO, color: 'rgba(255,255,255,0.3)', marginRight: '8px' }}
+          >
+            {playlistIndex + 1}/{playlist.length}
+          </span>
+        )}
 
         {/* File name — right-aligned, muted */}
         {fileName && (
@@ -143,7 +224,7 @@ export function ControlBar(): React.ReactElement {
 
         {/* Speed indicator */}
         {Math.abs(speed - 1) > 0.01 && (
-          <span style={{ ...MONO, color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>
+          <span style={{ ...MONO, color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginLeft: '4px' }}>
             {speed}x
           </span>
         )}
@@ -168,20 +249,15 @@ export function ControlBar(): React.ReactElement {
           <SettingsIcon />
         </button>
 
-        {/* Open file button */}
+        {/* Open file(s) button */}
         <button
-          onClick={async () => {
-            try {
-              const path = await window.mpvBridge.openFile()
-              if (path) await window.mpvBridge.loadFile(path)
-            } catch {}
-          }}
+          onClick={handleOpenFiles}
           className="flex items-center justify-center rounded-lg transition-colors duration-150"
           style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '4px', flexShrink: 0 }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-          aria-label="Ouvrir un fichier"
-          title="Ouvrir un fichier"
+          aria-label="Ouvrir des fichiers"
+          title="Ouvrir des fichiers"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>

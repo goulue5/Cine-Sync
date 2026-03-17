@@ -11,6 +11,11 @@ export interface MpvTrack {
   external?: boolean
 }
 
+export interface MpvChapter {
+  title: string
+  time: number
+}
+
 export interface PlayerState {
   // Playback
   isPlaying: boolean
@@ -35,6 +40,10 @@ export interface PlayerState {
   subDelay: number
   audioDelay: number
 
+  // Chapters
+  chapters: MpvChapter[]
+  currentChapter: number
+
   // UI
   controlsVisible: boolean
   settingsOpen: boolean
@@ -56,6 +65,8 @@ export interface PlayerState {
   setCurrentSid: (v: number | 'auto' | 'no' | null) => void
   setSubDelay: (v: number) => void
   setAudioDelay: (v: number) => void
+  setChapters: (v: MpvChapter[]) => void
+  setCurrentChapter: (v: number) => void
   setControlsVisible: (v: boolean) => void
   setSettingsOpen: (v: boolean) => void
   setMpvError: (v: string | null) => void
@@ -85,6 +96,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentSid: null,
   subDelay: 0,
   audioDelay: 0,
+  chapters: [],
+  currentChapter: 0,
   controlsVisible: true,
   settingsOpen: false,
   mpvError: null,
@@ -104,6 +117,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setCurrentSid: (v) => set({ currentSid: v }),
   setSubDelay: (v) => set({ subDelay: v ?? 0 }),
   setAudioDelay: (v) => set({ audioDelay: v ?? 0 }),
+  setChapters: (v) => set({ chapters: v ?? [] }),
+  setCurrentChapter: (v) => set({ currentChapter: v ?? 0 }),
   setControlsVisible: (v) => set({ controlsVisible: v }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setMpvError: (v) => set({ mpvError: v }),

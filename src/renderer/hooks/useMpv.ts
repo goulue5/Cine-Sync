@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { usePlayerStore, MpvTrack } from '../store/playerStore'
+import { usePlayerStore, MpvTrack, MpvChapter } from '../store/playerStore'
 
 interface MpvPropertyChangeEvent {
   event: 'property-change'
@@ -74,6 +74,14 @@ export function useMpv(): void {
             break
           case 'path':
             store.setFilePath(typeof e.data === 'string' ? e.data : null)
+            break
+          case 'chapter-list':
+            if (Array.isArray(e.data)) {
+              store.setChapters(e.data as MpvChapter[])
+            }
+            break
+          case 'chapter':
+            store.setCurrentChapter(typeof e.data === 'number' ? e.data : 0)
             break
         }
       } else if (event.event === 'external-file') {

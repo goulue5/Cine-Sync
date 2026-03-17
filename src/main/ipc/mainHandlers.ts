@@ -25,6 +25,8 @@ const OBS = {
   SUB_DELAY: 12,
   AUDIO_DELAY: 13,
   PATH: 14,
+  CHAPTER_LIST: 15,
+  CHAPTER: 16,
 } as const
 
 // ── Resume playback state ───────────────────────────────────────────────────
@@ -259,6 +261,8 @@ export async function setupObservers(
     await cmd.observeProperty(OBS.SUB_DELAY, 'sub-delay')
     await cmd.observeProperty(OBS.AUDIO_DELAY, 'audio-delay')
     await cmd.observeProperty(OBS.PATH, 'path')
+    await cmd.observeProperty(OBS.CHAPTER_LIST, 'chapter-list')
+    await cmd.observeProperty(OBS.CHAPTER, 'chapter')
   } catch (err) {
     console.error('[ipc] failed to setup observers:', err)
   }

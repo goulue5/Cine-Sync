@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
 import { usePlayerStore, MpvTrack } from '../../store/playerStore'
 import { useOsd } from './OsdNotification'
 
@@ -240,6 +240,115 @@ export function SettingsPanel(): React.ReactElement {
           <DelayButton label="+0.5" onClick={() => adjustAudioDelay(0.5)} />
         </div>
       </Section>
+
+      {/* Video filters */}
+      <VideoFilters osdShow={osdShow} />
+    </div>
+  )
+}
+
+const FILTERS = [
+  { key: 'brightness', label: 'Luminosité', min: -100, max: 100 },
+  { key: 'contrast', label: 'Contraste', min: -100, max: 100 },
+  { key: 'saturation', label: 'Saturation', min: -100, max: 100 },
+  { key: 'gamma', label: 'Gamma', min: -100, max: 100 },
+] as const
+
+function VideoFilters({ osdShow }: { osdShow: (msg: string) => void }): React.ReactElement {
+  const [values, setValues] = useState<Record<string, number>>({
+    brightness: 0,
+    contrast: 0,
+    saturation: 0,
+    gamma: 0,
+  })
+
+  const handleChange = useCallback((key: string, value: number) => {
+    setValues(prev => ({ ...prev, [key]: value }))
+    window.mpvBridge.setProperty(key, value)
+  }, [])
+
+  const handleReset = useCallback(() => {
+    const reset = { brightness: 0, contrast: 0, saturation: 0, gamma: 0 }
+    setValues(reset)
+    for (const [key, val] of Object.entries(reset)) {
+      window.mpvBridge.setProperty(key, val)
+    }
+    osdShow('Filtres réinitialisés')
+  }, [osdShow])
+
+  const hasChanges = Object.values(values).some(v => v !== 0)
+
+  return (
+    <Section title="Filtres vidéo">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {FILTERS.map(f => (
+          <FilterSlider
+            key={f.key}
+            label={f.label}
+            value={values[f.key]}
+            min={f.min}
+            max={f.max}
+            onChange={(v) => handleChange(f.key, v)}
+          />
+        ))}
+        {hasChanges && (
+          <button
+            onClick={handleReset}
+            style={{
+              marginTop: '4px',
+              padding: '5px 8px',
+              borderRadius: '4px',
+              border: 'none',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.45)',
+              fontSize: '10px',
+              cursor: 'pointer',
+              ...MONO,
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
+          >
+            Réinitialiser les filtres
+          </button>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function FilterSlider({ label, value, min, max, onChange }: {
+  label: string
+  value: number
+  min: number
+  max: number
+  onChange: (v: number) => void
+}): React.ReactElement {
+  const pct = ((value - min) / (max - min)) * 100
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', ...MONO }}>{label}</span>
+        <span style={{ color: value !== 0 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)', fontSize: '11px', ...MONO }}>
+          {value > 0 ? `+${value}` : value}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={e => onChange(parseInt(e.target.value))}
+        onDoubleClick={() => onChange(0)}
+        style={{
+          width: '100%',
+          height: '4px',
+          appearance: 'none',
+          background: `linear-gradient(to right, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.3) ${pct}%, rgba(255,255,255,0.08) ${pct}%, rgba(255,255,255,0.08) 100%)`,
+          borderRadius: '2px',
+          outline: 'none',
+          cursor: 'pointer',
+        }}
+      />
     </div>
   )
 }

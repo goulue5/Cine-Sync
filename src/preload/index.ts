@@ -34,6 +34,10 @@ const mpvBridge = {
   getResumePosition: (filePath: string): Promise<number | null> =>
     ipcRenderer.invoke('mpv:getResumePosition', filePath),
 
+  // Recent files
+  getRecentFiles: (): Promise<{ filePath: string; fileName: string; position: number; duration: number; timestamp: number }[]> =>
+    ipcRenderer.invoke('history:getRecent'),
+
   // File dialogs
   openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
   openFiles: (): Promise<string[]> => ipcRenderer.invoke('dialog:openFiles'),

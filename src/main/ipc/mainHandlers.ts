@@ -3,7 +3,7 @@ import * as os from 'os'
 import { MpvCommandQueue } from '../mpv/MpvCommandQueue'
 import { MpvIpcClient } from '../mpv/MpvIpcClient'
 import { MpvEvent } from '../mpv/mpvTypes'
-import { savePosition, getResumePosition } from '../resumeStore'
+import { savePosition, getResumePosition, getRecentFiles } from '../resumeStore'
 import { searchSubtitles, downloadSubtitle, computeFileHash } from '../subtitles/opensubtitles'
 import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
 
@@ -86,6 +86,9 @@ export function registerMainHandlers(
   ipcMain.handle('mpv:getResumePosition', (_e, filePath: string) => {
     return getResumePosition(filePath)
   })
+
+  // ── Recent files ───────────────────────────────────────────────────
+  ipcMain.handle('history:getRecent', () => getRecentFiles())
 
   // ── Subtitle file dialog ──────────────────────────────────────────────
   ipcMain.handle('dialog:openSubtitle', async () => {
@@ -322,6 +325,7 @@ export function unregisterMainHandlers(): void {
     'mpv:addSubtitle',
     'mpv:setSpeed', 'mpv:setSubDelay', 'mpv:setAudioDelay',
     'mpv:getResumePosition',
+    'history:getRecent',
     'dialog:openSubtitle', 'dialog:openFiles',
     'subs:search', 'subs:download',
     'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:getLocalIP', 'sync:stop', 'sync:status',

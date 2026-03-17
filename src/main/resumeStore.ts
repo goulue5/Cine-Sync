@@ -60,3 +60,24 @@ export function getResumePosition(filePath: string): number | null {
   if (!entry) return null
   return entry.position
 }
+
+export interface RecentFile {
+  filePath: string
+  fileName: string
+  position: number
+  duration: number
+  timestamp: number
+}
+
+export function getRecentFiles(limit = 20): RecentFile[] {
+  return Object.entries(data)
+    .sort((a, b) => b[1].timestamp - a[1].timestamp)
+    .slice(0, limit)
+    .map(([filePath, entry]) => ({
+      filePath,
+      fileName: path.basename(filePath),
+      position: entry.position,
+      duration: entry.duration,
+      timestamp: entry.timestamp,
+    }))
+}

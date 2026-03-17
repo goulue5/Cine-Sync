@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
 
 const SUPPORTED_VIDEO_EXTENSIONS = new Set([
@@ -9,6 +9,14 @@ const SUPPORTED_VIDEO_EXTENSIONS = new Set([
 const SUPPORTED_SUBTITLE_EXTENSIONS = new Set([
   '.srt', '.ass', '.ssa', '.sub', '.vtt', '.idx', '.sup', '.smi',
 ])
+
+interface RecentFile {
+  filePath: string
+  fileName: string
+  position: number
+  duration: number
+  timestamp: number
+}
 
 function getExtension(filePath: string): string {
   const dot = filePath.lastIndexOf('.')
@@ -24,13 +32,42 @@ function isSubtitleFile(filePath: string): boolean {
   return SUPPORTED_SUBTITLE_EXTENSIONS.has(getExtension(filePath))
 }
 
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return "à l'instant"
+  if (mins < 60) return `il y a ${mins}min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `il y a ${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'hier'
+  if (days < 30) return `il y a ${days}j`
+  return `il y a ${Math.floor(days / 30)} mois`
+}
+
 export function DragZone(): React.ReactElement {
   const [isDragOver, setIsDragOver] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([])
   const fileName = usePlayerStore(s => s.fileName)
   const mpvError = usePlayerStore(s => s.mpvError)
   const loadPlaylist = usePlayerStore(s => s.loadPlaylist)
   const dragCounter = useRef(0)
+
+  // Fetch recent files on mount (empty state only)
+  useEffect(() => {
+    if (!fileName && !mpvError) {
+      window.mpvBridge.getRecentFiles().then(setRecentFiles).catch(() => {})
+    }
+  }, [fileName, mpvError])
 
   const handleFiles = useCallback(async (files: { path: string; name: string }[]) => {
     setLoadError(null)
@@ -217,7 +254,7 @@ export function DragZone(): React.ReactElement {
           </p>
         </div>
       ) : (
-        // ── Normal drop zone ──
+        // ── Normal drop zone + recent files ──
         <div className="flex flex-col items-center" style={{ opacity: isDragOver ? 1 : 0.7, transition: 'opacity 0.2s' }}>
           {/* Circle — pointer-events-none so drag events pass through to parent */}
           <div
@@ -288,6 +325,88 @@ export function DragZone(): React.ReactElement {
           >
             {isDragOver ? 'Relâchez ici' : 'ou glissez des fichiers · MKV · MP4 · AVI · SRT · ASS'}
           </p>
+
+          {/* Recent files */}
+          {recentFiles.length > 0 && (
+            <div style={{ marginTop: '36px', width: '100%', maxWidth: '460px' }}>
+              <div
+                className="select-none pointer-events-none"
+                style={{
+                  color: 'rgba(255,255,255,0.25)',
+                  fontSize: '10px',
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  fontFamily: 'ui-monospace, monospace',
+                  marginBottom: '10px',
+                  textAlign: 'center',
+                }}
+              >
+                Fichiers récents
+              </div>
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {recentFiles.map((file) => (
+                  <button
+                    key={file.filePath}
+                    onClick={() => loadPlaylist([file.filePath])}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.background = 'transparent'
+                    }}
+                  >
+                    {/* Play icon */}
+                    <svg width="14" height="14" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                      <path d="M8 5.5L18 12L8 18.5V5.5Z" fill="rgba(255,255,255,0.2)" />
+                    </svg>
+                    {/* File info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        color: 'rgba(255,255,255,0.7)',
+                        fontSize: '12px',
+                        fontFamily: 'ui-monospace, monospace',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {file.fileName}
+                      </div>
+                      <div style={{
+                        color: 'rgba(255,255,255,0.25)',
+                        fontSize: '10px',
+                        fontFamily: 'ui-monospace, monospace',
+                        marginTop: '2px',
+                      }}>
+                        {formatDuration(file.position)} / {formatDuration(file.duration)}
+                      </div>
+                    </div>
+                    {/* Time ago */}
+                    <div style={{
+                      color: 'rgba(255,255,255,0.15)',
+                      fontSize: '10px',
+                      fontFamily: 'ui-monospace, monospace',
+                      flexShrink: 0,
+                    }}>
+                      {formatTimeAgo(file.timestamp)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

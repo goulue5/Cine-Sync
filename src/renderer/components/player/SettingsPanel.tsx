@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { usePlayerStore, MpvTrack } from '../../store/playerStore'
 import { useOsd } from './OsdNotification'
+import { useThemeStore, ACCENT_THEMES } from '../../store/themeStore'
 
 const MONO: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", monospace',
@@ -243,6 +244,9 @@ export function SettingsPanel(): React.ReactElement {
 
       {/* Video filters */}
       <VideoFilters osdShow={osdShow} />
+
+      {/* Theme */}
+      <ThemePicker />
     </div>
   )
 }
@@ -350,6 +354,35 @@ function FilterSlider({ label, value, min, max, onChange }: {
         }}
       />
     </div>
+  )
+}
+
+function ThemePicker(): React.ReactElement {
+  const accent = useThemeStore((s) => s.accent)
+  const setAccent = useThemeStore((s) => s.setAccent)
+
+  return (
+    <Section title="Couleur d'accent">
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        {Object.entries(ACCENT_THEMES).map(([key, theme]) => (
+          <button
+            key={key}
+            onClick={() => setAccent(key)}
+            title={theme.name}
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              border: accent === key ? '2px solid #fff' : '2px solid transparent',
+              background: theme.color,
+              cursor: 'pointer',
+              boxShadow: accent === key ? '0 0 0 2px rgba(255,255,255,0.2)' : 'none',
+              transition: 'border-color 0.15s, box-shadow 0.15s',
+            }}
+          />
+        ))}
+      </div>
+    </Section>
   )
 }
 

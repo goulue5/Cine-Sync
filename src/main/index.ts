@@ -6,6 +6,7 @@ import { MpvIpcClient } from './mpv/MpvIpcClient'
 import { MpvCommandQueue } from './mpv/MpvCommandQueue'
 import { registerMainHandlers, setupObservers, unregisterMainHandlers } from './ipc/mainHandlers'
 import { loadResumeStore } from './resumeStore'
+import Store from 'electron-store'
 import { DisplayInfo } from './mpv/displayProfile'
 import {
   startMpvWindowSync,
@@ -23,6 +24,9 @@ if (IS_WIN) {
 
 // Load saved playback positions
 loadResumeStore()
+
+// Persistent settings
+const settingsStore = new Store({ name: 'settings' })
 
 const mpvProcess = new MpvProcess()
 let ipcClient: MpvIpcClient | null = null
@@ -145,6 +149,44 @@ async function createWindow(): Promise<void> {
   })
   ipcMain.handle('window:isFullscreen', () => macFullscreen)
   ipcMain.handle('window:close', () => controlTarget.close())
+
+  // ── Picture-in-Picture ──────────────────────────────────────────────────
+  let pipActive = false
+  let prePipBounds: Electron.Rectangle | null = null
+
+  ipcMain.handle('window:pip', () => {
+    if (macFullscreen) return false // Exit fullscreen first
+
+    if (!pipActive) {
+      // Save current bounds
+      prePipBounds = controlTarget.getBounds()
+      // Calculate PiP position (bottom-right corner)
+      const display = screen.getDisplayMatching(controlTarget.getBounds())
+      const pipWidth = 400
+      const pipHeight = 225
+      const margin = 20
+      const x = display.workArea.x + display.workArea.width - pipWidth - margin
+      const y = display.workArea.y + display.workArea.height - pipHeight - margin
+      controlTarget.setBounds({ x, y, width: pipWidth, height: pipHeight })
+      if (!IS_MAC) controlTarget.setAlwaysOnTop(true)
+      pipActive = true
+    } else {
+      // Restore previous bounds
+      if (prePipBounds) controlTarget.setBounds(prePipBounds)
+      if (!IS_MAC) controlTarget.setAlwaysOnTop(false)
+      pipActive = false
+      prePipBounds = null
+    }
+    mainWin.webContents.send('window:pip-changed', pipActive)
+    return pipActive
+  })
+  ipcMain.handle('window:isPip', () => pipActive)
+
+  // ── Theme ───────────────────────────────────────────────────────────────
+  ipcMain.handle('theme:get', () => settingsStore.get('accentColor', 'blue'))
+  ipcMain.handle('theme:set', (_e, color: string) => {
+    settingsStore.set('accentColor', color)
+  })
 
   // ── DevTools ────────────────────────────────────────────────────────────
   if (!app.isPackaged) {
@@ -295,7 +337,7 @@ async function createWindow(): Promise<void> {
     if (stopMpvSync) stopMpvSync()
     unregisterMainHandlers()
     // Clean up window control handlers registered in this scope
-    for (const ch of ['window:minimize', 'window:maximize', 'window:close', 'window:isFullscreen', 'dialog:openFile']) {
+    for (const ch of ['window:minimize', 'window:maximize', 'window:close', 'window:isFullscreen', 'window:pip', 'window:isPip', 'theme:get', 'theme:set', 'dialog:openFile']) {
       ipcMain.removeHandler(ch)
     }
     ipcClient?.destroy()

@@ -77,7 +77,7 @@ export function SeekBar(): React.ReactElement {
             className="h-full rounded-full"
             style={{
               width: `${progress * 100}%`,
-              background: hovering ? '#fff' : 'rgba(255,255,255,0.75)',
+              background: hovering ? 'var(--accent, #fff)' : 'var(--accent-muted, rgba(255,255,255,0.75))',
               transition: 'background 0.15s',
             }}
           />
@@ -139,7 +139,7 @@ export function SeekBar(): React.ReactElement {
             left: `${progress * 100}%`,
             top: '50%',
             transform: 'translate(-50%, -50%)',
-            background: '#fff',
+            background: 'var(--accent, #fff)',
             opacity: hovering ? 1 : 0,
             boxShadow: '0 0 0 2px rgba(255,255,255,0.15)',
             transition: 'opacity 0.15s',

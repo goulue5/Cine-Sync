@@ -98,6 +98,19 @@ const mpvBridge = {
     return () => ipcRenderer.removeListener('window:fullscreen-changed', handler)
   },
 
+  // Picture-in-Picture
+  windowPip: (): Promise<boolean> => ipcRenderer.invoke('window:pip'),
+  isPip: (): Promise<boolean> => ipcRenderer.invoke('window:isPip'),
+  onPipChanged: (cb: (pip: boolean) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, pip: boolean) => cb(pip)
+    ipcRenderer.on('window:pip-changed', handler)
+    return () => ipcRenderer.removeListener('window:pip-changed', handler)
+  },
+
+  // Theme
+  getTheme: (): Promise<string> => ipcRenderer.invoke('theme:get'),
+  setTheme: (color: string) => ipcRenderer.invoke('theme:set', color),
+
   // Events
   onMpvEvent: (cb: MpvEventCallback): (() => void) => {
     const handler = (_: Electron.IpcRendererEvent, event: unknown) => cb(event)

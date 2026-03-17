@@ -151,11 +151,11 @@ export function ControlBar(): React.ReactElement {
               width: '42px',
               height: '42px',
               color: '#fff',
-              background: 'rgba(255,255,255,0.1)',
+              background: 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 20%, transparent)',
               margin: '0 4px',
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.18)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 35%, transparent)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 20%, transparent)' }}
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -227,6 +227,24 @@ export function ControlBar(): React.ReactElement {
           <span style={{ ...MONO, color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginLeft: '4px' }}>
             {speed}x
           </span>
+        )}
+
+        {/* PiP button */}
+        {fileName && (
+          <button
+            onClick={() => window.mpvBridge.windowPip()}
+            className="flex items-center justify-center rounded-lg transition-colors duration-150"
+            style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '4px', flexShrink: 0 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+            aria-label="Picture-in-Picture"
+            title="Picture-in-Picture"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <rect x="11" y="9" width="9" height="7" rx="1" fill="currentColor" opacity="0.3" />
+            </svg>
+          </button>
         )}
 
         {/* Settings button */}

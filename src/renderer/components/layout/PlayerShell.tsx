@@ -130,8 +130,13 @@ export function PlayerShell(): React.ReactElement {
           showControls()
           break
         case 'KeyP':
-          usePlayerStore.getState().playPrev()
-          showControls()
+          if (e.altKey) {
+            e.preventDefault()
+            window.mpvBridge.windowPip()
+          } else {
+            usePlayerStore.getState().playPrev()
+            showControls()
+          }
           break
         case 'KeyI':
           setMediaInfoOpen((v) => !v)

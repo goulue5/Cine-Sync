@@ -1,9 +1,13 @@
-import React, { useEffect, useRef, useCallback } from 'react'
+import React, { useEffect, useRef, useCallback, useState } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
 import { useMpv } from '../../hooks/useMpv'
 import { DragZone } from '../player/DragZone'
 import { ControlBar } from '../player/ControlBar'
 import { SettingsPanel } from '../player/SettingsPanel'
+import { OsdNotification, useOsd } from '../player/OsdNotification'
+import { MediaInfoPanel } from '../player/MediaInfoPanel'
+import { SubtitleSearchPanel } from '../player/SubtitleSearchPanel'
+import { WatchTogetherPanel } from '../player/WatchTogetherPanel'
 
 const CONTROLS_HIDE_DELAY = 3000
 
@@ -15,7 +19,18 @@ export function PlayerShell(): React.ReactElement {
   const fileName = usePlayerStore(s => s.fileName)
   const settingsOpen = usePlayerStore(s => s.settingsOpen)
   const setSettingsOpen = usePlayerStore(s => s.setSettingsOpen)
+  const osdShow = useOsd((s) => s.show)
+  const [mediaInfoOpen, setMediaInfoOpen] = useState(false)
+  const [subSearchOpen, setSubSearchOpen] = useState(false)
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Track fullscreen state from main process
+  useEffect(() => {
+    const cleanup = window.mpvBridge.onFullscreenChanged((fs) => setIsFullscreen(fs))
+    return cleanup
+  }, [])
 
   const showControls = useCallback(() => {
     setControlsVisible(true)
@@ -45,8 +60,9 @@ export function PlayerShell(): React.ReactElement {
     const delta = e.deltaY < 0 ? 5 : -5
     const newVol = Math.max(0, Math.min(130, usePlayerStore.getState().volume + delta))
     window.mpvBridge.setVolume(newVol)
+    osdShow(`Volume : ${newVol}%`)
     showControls()
-  }, [showControls])
+  }, [showControls, osdShow])
 
   // ── Double-click → fullscreen ─────────────────────────────────────────────
   const handleDoubleClick = useCallback(() => {
@@ -60,56 +76,87 @@ export function PlayerShell(): React.ReactElement {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
       switch (e.code) {
-        case 'Space':
+        case 'Space': {
           e.preventDefault()
           window.mpvBridge.togglePause()
+          const paused = usePlayerStore.getState().isPlaying
+          osdShow(paused ? 'Pause' : 'Lecture')
           showControls()
           break
-        case 'ArrowRight':
+        }
+        case 'ArrowRight': {
           e.preventDefault()
-          window.mpvBridge.seek(e.shiftKey ? 30 : 5, 'relative')
+          const secs = e.shiftKey ? 30 : 5
+          window.mpvBridge.seek(secs, 'relative')
+          osdShow(`Avancer +${secs}s`)
           showControls()
           break
-        case 'ArrowLeft':
+        }
+        case 'ArrowLeft': {
           e.preventDefault()
-          window.mpvBridge.seek(e.shiftKey ? -30 : -5, 'relative')
+          const secs = e.shiftKey ? 30 : 5
+          window.mpvBridge.seek(-secs, 'relative')
+          osdShow(`Reculer -${secs}s`)
           showControls()
           break
-        case 'ArrowUp':
+        }
+        case 'ArrowUp': {
           e.preventDefault()
-          window.mpvBridge.setVolume(Math.min(130, usePlayerStore.getState().volume + 5))
+          const vol = Math.min(130, usePlayerStore.getState().volume + 5)
+          window.mpvBridge.setVolume(vol)
+          osdShow(`Volume : ${vol}%`)
           showControls()
           break
-        case 'ArrowDown':
+        }
+        case 'ArrowDown': {
           e.preventDefault()
-          window.mpvBridge.setVolume(Math.max(0, usePlayerStore.getState().volume - 5))
+          const vol = Math.max(0, usePlayerStore.getState().volume - 5)
+          window.mpvBridge.setVolume(vol)
+          osdShow(`Volume : ${vol}%`)
           showControls()
           break
-        case 'KeyM':
-          window.mpvBridge.setMute(!usePlayerStore.getState().mute)
+        }
+        case 'KeyM': {
+          const muted = !usePlayerStore.getState().mute
+          window.mpvBridge.setMute(muted)
+          osdShow(muted ? 'Son coupé' : 'Son activé')
           break
+        }
         case 'KeyF':
           window.mpvBridge.windowMaximize()
           break
         case 'KeyN':
-          // Next in playlist
           usePlayerStore.getState().playNext()
           showControls()
           break
         case 'KeyP':
-          // Previous in playlist
           usePlayerStore.getState().playPrev()
           showControls()
           break
+        case 'KeyI':
+          setMediaInfoOpen((v) => !v)
+          break
+        case 'KeyS':
+          if (usePlayerStore.getState().fileName) {
+            setSubSearchOpen((v) => !v)
+          }
+          break
+        case 'KeyW':
+          setSyncOpen((v) => !v)
+          break
         case 'Escape':
-          if (settingsOpen) setSettingsOpen(false)
+          if (syncOpen) setSyncOpen(false)
+          else if (subSearchOpen) setSubSearchOpen(false)
+          else if (mediaInfoOpen) setMediaInfoOpen(false)
+          else if (settingsOpen) setSettingsOpen(false)
+          else if (isFullscreen) window.mpvBridge.windowMaximize()
           break
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showControls, settingsOpen, setSettingsOpen])
+  }, [showControls, settingsOpen, setSettingsOpen, mediaInfoOpen, subSearchOpen, syncOpen, isFullscreen, osdShow])
 
   return (
     <div
@@ -122,6 +169,24 @@ export function PlayerShell(): React.ReactElement {
       {/* Black background — ONLY when no video is loaded */}
       {!fileName && (
         <div className="absolute inset-0 bg-black" />
+      )}
+
+      {/* OSD notifications (volume, seek, etc.) */}
+      <OsdNotification />
+
+      {/* Media info overlay (toggle with I key) */}
+      {mediaInfoOpen && fileName && (
+        <MediaInfoPanel onClose={() => setMediaInfoOpen(false)} />
+      )}
+
+      {/* Subtitle search (toggle with S key) */}
+      {subSearchOpen && fileName && (
+        <SubtitleSearchPanel onClose={() => setSubSearchOpen(false)} />
+      )}
+
+      {/* Watch Together (toggle with W key) */}
+      {syncOpen && (
+        <WatchTogetherPanel onClose={() => setSyncOpen(false)} />
       )}
 
       {/* Title bar drag region + window controls (z-30, always visible)

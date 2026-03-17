@@ -76,6 +76,12 @@ export function useMpv(): void {
             store.setFilePath(typeof e.data === 'string' ? e.data : null)
             break
         }
+      } else if (event.event === 'external-file') {
+        // File opened via double-click / "Open With"
+        const filePath = event.data as string
+        if (filePath) {
+          store.loadPlaylist([filePath], 0)
+        }
       } else if (event.event === 'start-file') {
         store.setEofReached(false)
         store.setTimePos(0)

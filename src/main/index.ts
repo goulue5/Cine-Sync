@@ -1,4 +1,4 @@
-import { app, BaseWindow, BrowserWindow, shell, globalShortcut, dialog, ipcMain, screen } from 'electron'
+import { app, BaseWindow, BrowserWindow, shell, globalShortcut, dialog, ipcMain, screen, powerSaveBlocker } from 'electron'
 import { join } from 'path'
 import { getNativeViewHandle } from './window'
 import { MpvProcess } from './mpv/MpvProcess'
@@ -9,6 +9,7 @@ import { loadResumeStore } from './resumeStore'
 import { DisplayInfo } from './mpv/displayProfile'
 import {
   startMpvWindowSync,
+  notifyFullscreen,
 } from './macOS/mpvWindowSync'
 
 const IS_MAC = process.platform === 'darwin'
@@ -28,6 +29,9 @@ let ipcClient: MpvIpcClient | null = null
 
 // Track macOS window sync cleanup
 let stopMpvSync: (() => void) | null = null
+
+// Prevent display sleep during playback
+let powerSaveId: number | null = null
 
 async function createWindow(): Promise<void> {
   // ═══════════════════════════════════════════════════════════════════════════
@@ -114,11 +118,32 @@ async function createWindow(): Promise<void> {
   // ── Window controls ─────────────────────────────────────────────────────
   const controlTarget = videoWin ?? mainWin
 
+  // macOS simulated fullscreen state
+  let macFullscreen = false
+
   ipcMain.handle('window:minimize', () => controlTarget.minimize())
   ipcMain.handle('window:maximize', () => {
-    if (controlTarget.isMaximized()) controlTarget.unmaximize()
-    else controlTarget.maximize()
+    if (IS_MAC) {
+      // macOS: use simulated fullscreen (no separate Space — mpv stays synced)
+      macFullscreen = !macFullscreen
+      notifyFullscreen(macFullscreen)
+      mainWin.setHasShadow(!macFullscreen) // Disable shadow in fullscreen to avoid bounds offset
+      mainWin.setSimpleFullScreen(macFullscreen)
+      // screen-saver level floats above dock/menu bar in fullscreen
+      mainWin.setAlwaysOnTop(true, macFullscreen ? 'screen-saver' : 'floating')
+      if (macFullscreen) {
+        // Force Electron window to exactly cover the display (no offset from shadow/animation)
+        const display = screen.getDisplayMatching(mainWin.getBounds())
+        mainWin.setBounds(display.bounds)
+      }
+      mainWin.webContents.send('window:fullscreen-changed', macFullscreen)
+    } else if (controlTarget.isMaximized()) {
+      controlTarget.unmaximize()
+    } else {
+      controlTarget.maximize()
+    }
   })
+  ipcMain.handle('window:isFullscreen', () => macFullscreen)
   ipcMain.handle('window:close', () => controlTarget.close())
 
   // ── DevTools ────────────────────────────────────────────────────────────
@@ -219,6 +244,10 @@ async function createWindow(): Promise<void> {
         mpvProcess.spawn({ displayInfo })
       }
 
+      // Prevent screen from sleeping during playback
+      powerSaveId = powerSaveBlocker.start('prevent-display-sleep')
+      console.log('[main] display sleep blocked')
+
       await ipcClient.connect()
       ipcClient.enableAutoReconnect()
       console.log('[main] mpv IPC connected')
@@ -238,6 +267,19 @@ async function createWindow(): Promise<void> {
 
       ipcClient.on('error', (err) => console.error('[main] mpv IPC error:', err))
       ipcClient.on('close', () => console.log('[main] mpv IPC closed'))
+
+      // Store ref for open-file handler
+      mainWinRef = mainWin
+
+      // If a file was opened via double-click before the app was ready, load it now
+      if (pendingFilePath) {
+        console.log('[main] loading pending file:', pendingFilePath)
+        mainWin.webContents.send('mpv:event', {
+          event: 'external-file',
+          data: pendingFilePath,
+        })
+        pendingFilePath = null
+      }
     } catch (err) {
       console.error('[main] failed to start mpv:', err)
       mainWin.webContents.send('mpv:error', {
@@ -249,8 +291,13 @@ async function createWindow(): Promise<void> {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────
   mainWin.on('closed', () => {
+    if (powerSaveId !== null) powerSaveBlocker.stop(powerSaveId)
     if (stopMpvSync) stopMpvSync()
     unregisterMainHandlers()
+    // Clean up window control handlers registered in this scope
+    for (const ch of ['window:minimize', 'window:maximize', 'window:close', 'window:isFullscreen', 'dialog:openFile']) {
+      ipcMain.removeHandler(ch)
+    }
     ipcClient?.destroy()
     mpvProcess.kill()
     if (videoWin && !videoWin.isDestroyed()) videoWin.close()
@@ -261,6 +308,29 @@ async function createWindow(): Promise<void> {
     })
   }
 }
+
+// ── File association: handle files opened via double-click / "Open With" ─────
+let pendingFilePath: string | null = null
+let mainWinRef: BrowserWindow | null = null
+
+// macOS: open-file event
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  if (mainWinRef && ipcClient) {
+    mainWinRef.webContents.send('mpv:event', {
+      event: 'external-file',
+      data: filePath,
+    })
+  } else {
+    pendingFilePath = filePath
+  }
+})
+
+// Windows/Linux: file path passed as command-line argument
+const cliFile = process.argv.find((arg) =>
+  /\.(mkv|mp4|avi|mov|wmv|flv|webm|m4v|ts|m2ts|mts|mpg|mpeg|ogv)$/i.test(arg)
+)
+if (cliFile) pendingFilePath = cliFile
 
 app.whenReady().then(createWindow)
 

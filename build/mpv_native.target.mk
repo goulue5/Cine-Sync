@@ -57,13 +57,13 @@ CFLAGS_OBJC_Debug :=
 CFLAGS_OBJCC_Debug :=
 
 INCS_Debug := \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/include/node \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/src \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/openssl/config \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/openssl/openssl/include \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/uv/include \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/zlib \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/v8/include
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/include/node \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/src \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/openssl/config \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/openssl/openssl/include \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/uv/include \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/zlib \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/v8/include
 
 DEFS_Release := \
 	'-DNODE_GYP_MODULE_NAME=mpv_native' \
@@ -118,13 +118,13 @@ CFLAGS_OBJC_Release :=
 CFLAGS_OBJCC_Release :=
 
 INCS_Release := \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/include/node \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/src \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/openssl/config \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/openssl/openssl/include \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/uv/include \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/zlib \
-	-I/Users/matteokhan/.electron-gyp/34.5.8/deps/v8/include
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/include/node \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/src \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/openssl/config \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/openssl/openssl/include \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/uv/include \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/zlib \
+	-I/Users/matteokhan/Library/Caches/node-gyp/34.5.8/deps/v8/include
 
 OBJS := \
 	$(obj).target/$(TARGET)/src/main/native/mpv_native.o

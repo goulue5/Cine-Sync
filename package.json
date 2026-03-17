@@ -21,6 +21,7 @@
     "electron-store": "^10.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "ws": "^8.19.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -30,6 +31,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^34.0.0",
     "electron-builder": "^26.8.1",
@@ -51,6 +53,30 @@
     },
     "files": [
       "out/**/*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "mkv",
+          "mp4",
+          "avi",
+          "mov",
+          "wmv",
+          "flv",
+          "webm",
+          "m4v",
+          "ts",
+          "m2ts",
+          "mts",
+          "mpg",
+          "mpeg",
+          "ogv"
+        ],
+        "name": "Video File",
+        "description": "Video file playable by Cine-Sync",
+        "mimeType": "video/*",
+        "role": "Viewer"
+      }
     ],
     "extraResources": [
       {

@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react'
 import { usePlayerStore, MpvTrack } from '../../store/playerStore'
+import { useOsd } from './OsdNotification'
 
 const MONO: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", monospace',
@@ -73,9 +74,12 @@ export function SettingsPanel(): React.ReactElement {
     window.mpvBridge.setSubtitleTrack(id)
   }, [])
 
+  const osdShow = useOsd((st) => st.show)
+
   const handleSpeed = useCallback((s: number) => {
     window.mpvBridge.setSpeed(s)
-  }, [])
+    osdShow(`Vitesse : ${s}x`)
+  }, [osdShow])
 
   const adjustSubDelay = useCallback((delta: number) => {
     window.mpvBridge.setSubDelay(Math.round((subDelay + delta) * 10) / 10)

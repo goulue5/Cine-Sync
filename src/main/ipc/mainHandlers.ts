@@ -1,8 +1,14 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
+import * as os from 'os'
 import { MpvCommandQueue } from '../mpv/MpvCommandQueue'
 import { MpvIpcClient } from '../mpv/MpvIpcClient'
 import { MpvEvent } from '../mpv/mpvTypes'
 import { savePosition, getResumePosition } from '../resumeStore'
+import { searchSubtitles, downloadSubtitle, computeFileHash } from '../subtitles/opensubtitles'
+import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
+
+let syncHost: WatchTogetherHost | null = null
+let syncClient: WatchTogetherClient | null = null
 
 const OBS = {
   TIME_POS: 1,
@@ -97,6 +103,121 @@ export function registerMainHandlers(
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
 
+  // ── Subtitle search (OpenSubtitles) ──────────────────────────────────
+  ipcMain.handle('subs:search', async (_e, query: string, filePath?: string) => {
+    try {
+      let hash: string | undefined
+      if (filePath) {
+        hash = await computeFileHash(filePath)
+      }
+      return await searchSubtitles(query, ['fr', 'en'], hash || undefined)
+    } catch (err) {
+      console.error('[subs] search error:', err)
+      return []
+    }
+  })
+
+  ipcMain.handle('subs:download', async (_e, fileId: number) => {
+    try {
+      const result = await downloadSubtitle(fileId)
+      // Load subtitle into mpv
+      await cmd.addSubtitle(result.filePath)
+      return result
+    } catch (err) {
+      console.error('[subs] download error:', err)
+      throw err
+    }
+  })
+
+  // ── Watch Together ───────────────────────────────────────────────────
+  ipcMain.handle('sync:host', async (_e, port?: number) => {
+    if (syncHost?.isRunning) return { ok: true, port }
+    syncHost = new WatchTogetherHost(port ?? 9876)
+    const actualPort = await syncHost.start()
+
+    // Forward sync actions from clients → renderer
+    syncHost.on('sync', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+    })
+    syncHost.on('users', (users: string[]) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:users', users)
+    })
+    syncHost.on('user-joined', (name: string) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:user-joined', name)
+    })
+    syncHost.on('user-left', (name: string) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:user-left', name)
+    })
+    syncHost.on('chat', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
+    })
+
+    return { ok: true, port: actualPort }
+  })
+
+  ipcMain.handle('sync:join', async (_e, host: string, port: number, name: string) => {
+    syncClient = new WatchTogetherClient(name)
+    await syncClient.connect(host, port)
+
+    syncClient.on('sync', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+    })
+    syncClient.on('users', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:users', msg.users ?? [])
+    })
+    syncClient.on('state', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+    })
+    syncClient.on('disconnected', () => {
+      if (!win.isDestroyed()) win.webContents.send('sync:disconnected')
+    })
+    syncClient.on('chat', (msg: SyncMessage) => {
+      if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
+    })
+
+    return { ok: true }
+  })
+
+  ipcMain.handle('sync:send', (_e, action: 'pause' | 'play' | 'seek', time?: number) => {
+    if (syncHost?.isRunning) syncHost.sendSync(action, time)
+    else if (syncClient?.isConnected) syncClient.sendSync(action, time)
+  })
+
+  ipcMain.handle('sync:sendChat', (_e, text: string) => {
+    if (syncHost?.isRunning) {
+      const msg: SyncMessage = { type: 'chat', text, from: 'Hôte' }
+      syncHost.broadcast(msg)
+      if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
+    } else if (syncClient?.isConnected) {
+      syncClient.sendChat(text)
+    }
+  })
+
+  ipcMain.handle('sync:getLocalIP', () => {
+    const nets = os.networkInterfaces()
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address
+        }
+      }
+    }
+    return '127.0.0.1'
+  })
+
+  ipcMain.handle('sync:stop', () => {
+    syncHost?.stop()
+    syncHost = null
+    syncClient?.disconnect()
+    syncClient = null
+  })
+
+  ipcMain.handle('sync:status', () => {
+    if (syncHost?.isRunning) return { role: 'host', users: syncHost.userCount }
+    if (syncClient?.isConnected) return { role: 'client' }
+    return { role: null }
+  })
+
   // ── Multiple files dialog (playlist) ──────────────────────────────────
   ipcMain.handle('dialog:openFiles', async () => {
     const result = await dialog.showOpenDialog(win, {
@@ -187,6 +308,11 @@ export function unregisterMainHandlers(): void {
   if (currentFilePath && currentDuration > 0) {
     savePosition(currentFilePath, currentTimePos, currentDuration)
   }
+  // Clean up sync
+  syncHost?.stop()
+  syncHost = null
+  syncClient?.disconnect()
+  syncClient = null
 
   const channels = [
     'mpv:loadFile', 'mpv:play', 'mpv:pause', 'mpv:togglePause',
@@ -197,6 +323,8 @@ export function unregisterMainHandlers(): void {
     'mpv:setSpeed', 'mpv:setSubDelay', 'mpv:setAudioDelay',
     'mpv:getResumePosition',
     'dialog:openSubtitle', 'dialog:openFiles',
+    'subs:search', 'subs:download',
+    'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:getLocalIP', 'sync:stop', 'sync:status',
   ]
   for (const ch of channels) {
     ipcMain.removeHandler(ch)

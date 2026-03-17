@@ -38,10 +38,61 @@ const mpvBridge = {
   openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
   openFiles: (): Promise<string[]> => ipcRenderer.invoke('dialog:openFiles'),
 
+  // Subtitle search
+  searchSubtitles: (query: string, filePath?: string) =>
+    ipcRenderer.invoke('subs:search', query, filePath),
+  downloadSubtitle: (fileId: number) =>
+    ipcRenderer.invoke('subs:download', fileId),
+
+  // Watch Together
+  syncHost: (port?: number) => ipcRenderer.invoke('sync:host', port),
+  syncJoin: (host: string, port: number, name: string) => ipcRenderer.invoke('sync:join', host, port, name),
+  syncSend: (action: 'pause' | 'play' | 'seek', time?: number) => ipcRenderer.invoke('sync:send', action, time),
+  syncStop: () => ipcRenderer.invoke('sync:stop'),
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
+  onSyncAction: (cb: (msg: unknown) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, msg: unknown) => cb(msg)
+    ipcRenderer.on('sync:action', handler)
+    return () => ipcRenderer.removeListener('sync:action', handler)
+  },
+  onSyncUsers: (cb: (users: string[]) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, users: string[]) => cb(users)
+    ipcRenderer.on('sync:users', handler)
+    return () => ipcRenderer.removeListener('sync:users', handler)
+  },
+  onSyncUserJoined: (cb: (name: string) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, name: string) => cb(name)
+    ipcRenderer.on('sync:user-joined', handler)
+    return () => ipcRenderer.removeListener('sync:user-joined', handler)
+  },
+  onSyncUserLeft: (cb: (name: string) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, name: string) => cb(name)
+    ipcRenderer.on('sync:user-left', handler)
+    return () => ipcRenderer.removeListener('sync:user-left', handler)
+  },
+  onSyncChat: (cb: (msg: { from: string; text: string }) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, msg: { from: string; text: string }) => cb(msg)
+    ipcRenderer.on('sync:chat', handler)
+    return () => ipcRenderer.removeListener('sync:chat', handler)
+  },
+  syncSendChat: (text: string) => ipcRenderer.invoke('sync:sendChat', text),
+  syncGetLocalIP: (): Promise<string> => ipcRenderer.invoke('sync:getLocalIP'),
+  onSyncDisconnected: (cb: () => void): (() => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('sync:disconnected', handler)
+    return () => ipcRenderer.removeListener('sync:disconnected', handler)
+  },
+
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window:minimize'),
   windowMaximize: () => ipcRenderer.invoke('window:maximize'),
   windowClose: () => ipcRenderer.invoke('window:close'),
+  isFullscreen: (): Promise<boolean> => ipcRenderer.invoke('window:isFullscreen'),
+  onFullscreenChanged: (cb: (fs: boolean) => void): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, fs: boolean) => cb(fs)
+    ipcRenderer.on('window:fullscreen-changed', handler)
+    return () => ipcRenderer.removeListener('window:fullscreen-changed', handler)
+  },
 
   // Events
   onMpvEvent: (cb: MpvEventCallback): (() => void) => {

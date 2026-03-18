@@ -9,7 +9,7 @@ Lecteur video desktop open source avec Watch Together integre.
 
 - Lecture video (MP4, MKV, WebM, AVI, MOV + fallback ffmpeg pour ProRes et codecs exotiques)
 - Watch Together en LAN ou en ligne (rooms avec code, chat, sync play/pause/seek)
-- Recherche et telechargement de sous-titres (OpenSubtitles)
+- Sous-titres externes (SRT, VTT) par drag & drop ou chargement manuel
 - Filtres video (luminosite, contraste, saturation, gamma)
 - Picture-in-Picture
 - 8 themes de couleur
@@ -92,16 +92,6 @@ npm run dev
 | State | Zustand |
 | Video | HTML5 `<video>` + ffmpeg fallback |
 | Sync | WebSocket (ws) |
-
-## Configuration
-
-Creer un fichier `.env` a la racine du projet :
-
-```
-OPENSUBTITLES_API_KEY=votre_cle_api
-```
-
-Obtenir une cle API gratuite sur [opensubtitles.com](https://www.opensubtitles.com/consumers).
 
 ## Licence
 

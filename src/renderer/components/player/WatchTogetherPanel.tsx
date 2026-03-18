@@ -9,7 +9,8 @@ interface SyncAction {
   playing?: boolean
 }
 
-type SyncRole = 'host' | 'client' | null
+type SyncRole = 'host' | 'client' | 'relay' | null
+type SyncTab = 'lan' | 'online'
 
 interface ChatMessage {
   from: string
@@ -22,19 +23,29 @@ interface WatchTogetherPanelProps {
 
 export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.ReactElement {
   const osdShow = useOsd((s) => s.show)
+  const [tab, setTab] = useState<SyncTab>('lan')
   const [role, setRole] = useState<SyncRole>(null)
   const [users, setUsers] = useState<string[]>([])
-  const [joinHost, setJoinHost] = useState('')
-  const [joinPort, setJoinPort] = useState('9876')
-  const [joinName, setJoinName] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [hostPort, setHostPort] = useState('9876')
-  const [localIP, setLocalIP] = useState<string | null>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatOpen, setChatOpen] = useState(false)
   const ignoreSync = useRef(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // LAN state
+  const [joinHost, setJoinHost] = useState('')
+  const [joinPort, setJoinPort] = useState('9876')
+  const [joinName, setJoinName] = useState('')
+  const [hostPort, setHostPort] = useState('9876')
+  const [localIP, setLocalIP] = useState<string | null>(null)
+
+  // Online state
+  const [serverUrl, setServerUrl] = useState('https://cine-sync-relay.deno.dev')
+  const [onlineName, setOnlineName] = useState('')
+  const [roomCode, setRoomCode] = useState('')
+  const [joinCode, setJoinCode] = useState('')
+  const [loading, setLoading] = useState(false)
 
   // Listen for sync actions from remote
   useEffect(() => {
@@ -87,10 +98,17 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
       setRole(null)
       setUsers([])
       setChatMessages([])
+      setRoomCode('')
     })
 
     const cleanupChat = window.mpvBridge.onSyncChat((msg) => {
       setChatMessages((prev) => [...prev, { from: msg.from, text: msg.text }])
+    })
+
+    // Respond to state requests (relay mode)
+    const cleanupStateReq = window.mpvBridge.onSyncStateRequest(() => {
+      const { isPlaying, timePos } = usePlayerStore.getState()
+      window.mpvBridge.syncSendState(isPlaying, timePos)
     })
 
     return () => {
@@ -100,6 +118,7 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
       cleanupLeft()
       cleanupDisconnected()
       cleanupChat()
+      cleanupStateReq()
     }
   }, [role, osdShow])
 
@@ -119,13 +138,11 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
     const unsub = store.subscribe((state) => {
       if (ignoreSync.current) return
 
-      // Detect pause/play changes
       if (state.isPlaying !== prevPlaying) {
         prevPlaying = state.isPlaying
         window.mpvBridge.syncSend(state.isPlaying ? 'play' : 'pause')
       }
 
-      // Detect seeks (time jumps > 2s)
       const timeDelta = Math.abs(state.timePos - prevTime)
       if (timeDelta > 2 && state.timePos > 0) {
         window.mpvBridge.syncSend('seek', state.timePos)
@@ -136,6 +153,7 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
     return unsub
   }, [role])
 
+  // ── LAN handlers ──────────────────────────────────────────────────────
   const handleHost = useCallback(async () => {
     setError(null)
     try {
@@ -172,12 +190,57 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
     }
   }, [joinHost, joinPort, joinName, osdShow])
 
+  // ── Online handlers ───────────────────────────────────────────────────
+  const handleCreateRoom = useCallback(async () => {
+    if (!serverUrl.trim()) { setError('Entrez l\'URL du serveur'); return }
+    setError(null)
+    setLoading(true)
+    try {
+      const res = await window.mpvBridge.relayCreate(
+        serverUrl.trim(),
+        onlineName.trim() || 'Host'
+      )
+      setRole('relay')
+      setRoomCode(res.code)
+      setChatMessages([])
+      osdShow(`Room créée : ${res.code}`)
+    } catch {
+      setError('Impossible de créer la room')
+    } finally {
+      setLoading(false)
+    }
+  }, [serverUrl, onlineName, osdShow])
+
+  const handleJoinRoom = useCallback(async () => {
+    if (!joinCode.trim()) { setError('Entrez un code de room'); return }
+    if (!serverUrl.trim()) { setError('Entrez l\'URL du serveur'); return }
+    setError(null)
+    setLoading(true)
+    try {
+      await window.mpvBridge.relayJoin(
+        serverUrl.trim(),
+        joinCode.trim().toUpperCase(),
+        onlineName.trim() || 'Guest'
+      )
+      setRole('relay')
+      setRoomCode(joinCode.trim().toUpperCase())
+      setChatMessages([])
+      osdShow('Connecté à la room')
+    } catch {
+      setError('Room introuvable ou serveur indisponible')
+    } finally {
+      setLoading(false)
+    }
+  }, [serverUrl, joinCode, onlineName, osdShow])
+
+  // ── Common handlers ───────────────────────────────────────────────────
   const handleDisconnect = useCallback(async () => {
     await window.mpvBridge.syncStop()
     setRole(null)
     setUsers([])
     setChatMessages([])
     setLocalIP(null)
+    setRoomCode('')
     osdShow('Session terminée')
   }, [osdShow])
 
@@ -216,77 +279,168 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
       )}
 
       {!role ? (
-        <div className="p-3 space-y-4">
-          {/* Host section */}
-          <div>
-            <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Créer une session</div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={hostPort}
-                onChange={(e) => setHostPort(e.target.value)}
-                placeholder="Port"
-                className="w-20 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
-              />
-              <button
-                onClick={handleHost}
-                className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
-              >
-                Héberger
-              </button>
-            </div>
+        <div>
+          {/* Tab switcher */}
+          <div className="flex border-b border-white/10">
+            <button
+              onClick={() => { setTab('lan'); setError(null) }}
+              className="flex-1 px-3 py-2 text-xs uppercase tracking-wider transition-colors"
+              style={{
+                color: tab === 'lan' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                borderBottom: tab === 'lan' ? '2px solid var(--accent, rgb(59,130,246))' : '2px solid transparent',
+              }}
+            >
+              LAN
+            </button>
+            <button
+              onClick={() => { setTab('online'); setError(null) }}
+              className="flex-1 px-3 py-2 text-xs uppercase tracking-wider transition-colors"
+              style={{
+                color: tab === 'online' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                borderBottom: tab === 'online' ? '2px solid var(--accent, rgb(59,130,246))' : '2px solid transparent',
+              }}
+            >
+              En ligne
+            </button>
           </div>
 
-          <div className="border-t border-white/10" />
+          {tab === 'lan' ? (
+            /* ── LAN tab ── */
+            <div className="p-3 space-y-4">
+              <div>
+                <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Créer une session</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={hostPort}
+                    onChange={(e) => setHostPort(e.target.value)}
+                    placeholder="Port"
+                    className="w-20 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                  />
+                  <button
+                    onClick={handleHost}
+                    className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
+                  >
+                    Héberger
+                  </button>
+                </div>
+              </div>
 
-          {/* Join section */}
-          <div>
-            <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Rejoindre une session</div>
-            <div className="space-y-2">
-              <div className="flex gap-2">
+              <div className="border-t border-white/10" />
+
+              <div>
+                <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Rejoindre une session</div>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={joinHost}
+                      onChange={(e) => setJoinHost(e.target.value)}
+                      placeholder="Adresse IP"
+                      className="flex-1 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                    />
+                    <input
+                      type="text"
+                      value={joinPort}
+                      onChange={(e) => setJoinPort(e.target.value)}
+                      placeholder="Port"
+                      className="w-20 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={joinName}
+                      onChange={(e) => setJoinName(e.target.value)}
+                      placeholder="Ton pseudo"
+                      className="flex-1 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                    />
+                    <button
+                      onClick={handleJoin}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                    >
+                      Rejoindre
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── Online tab ── */
+            <div className="p-3 space-y-4">
+              {/* Server URL */}
+              <div>
+                <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Serveur relais</div>
                 <input
                   type="text"
-                  value={joinHost}
-                  onChange={(e) => setJoinHost(e.target.value)}
-                  placeholder="Adresse IP"
-                  className="flex-1 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
-                />
-                <input
-                  type="text"
-                  value={joinPort}
-                  onChange={(e) => setJoinPort(e.target.value)}
-                  placeholder="Port"
-                  className="w-20 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="https://cine-sync-relay.deno.dev"
+                  className="w-full bg-white/10 text-white text-xs px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30 font-mono"
                 />
               </div>
+
+              {/* Pseudo */}
+              <div>
+                <div className="text-white/50 text-[10px] uppercase tracking-wider mb-2">Pseudo</div>
+                <input
+                  type="text"
+                  value={onlineName}
+                  onChange={(e) => setOnlineName(e.target.value)}
+                  placeholder="Ton pseudo"
+                  className="w-full bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                />
+              </div>
+
+              <div className="border-t border-white/10" />
+
+              {/* Create room */}
+              <button
+                onClick={handleCreateRoom}
+                disabled={loading}
+                className="w-full px-3 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/50 text-white text-sm rounded transition-colors"
+              >
+                {loading ? '...' : 'Créer une room'}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 border-t border-white/10" />
+                <span className="text-white/20 text-[10px] uppercase">ou</span>
+                <div className="flex-1 border-t border-white/10" />
+              </div>
+
+              {/* Join room */}
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={joinName}
-                  onChange={(e) => setJoinName(e.target.value)}
-                  placeholder="Ton pseudo"
-                  className="flex-1 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="Code (ex: ABC123)"
+                  maxLength={6}
+                  className="flex-1 bg-white/10 text-white text-sm px-2 py-1.5 rounded outline-none focus:bg-white/15 placeholder:text-white/30 font-mono uppercase tracking-widest text-center"
                 />
                 <button
-                  onClick={handleJoin}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors"
+                  onClick={handleJoinRoom}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white text-sm rounded transition-colors"
                 >
                   Rejoindre
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       ) : (
+        /* ── Connected state ── */
         <div className="p-3 space-y-3">
-          {/* Connected state */}
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             <span className="text-green-400 text-xs font-medium">
-              {role === 'host' ? 'Session active (hôte)' : 'Connecté'}
+              {role === 'host' ? 'Session active (hôte)' : role === 'relay' ? 'Connecté (en ligne)' : 'Connecté'}
             </span>
           </div>
 
+          {/* LAN: show IP */}
           {role === 'host' && localIP && (
             <div className="bg-white/5 rounded px-2 py-1.5">
               <div className="text-white/40 text-[10px] uppercase tracking-wider mb-1">
@@ -301,6 +455,29 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
               >
                 <span className="text-white/90 text-sm font-mono">
                   {localIP}:{hostPort}
+                </span>
+                <span className="text-white/30 text-[10px] group-hover:text-white/60 transition-colors">
+                  copier
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Online: show room code */}
+          {role === 'relay' && roomCode && (
+            <div className="bg-white/5 rounded px-2 py-1.5">
+              <div className="text-white/40 text-[10px] uppercase tracking-wider mb-1">
+                Code de la room
+              </div>
+              <div
+                className="flex items-center gap-2 cursor-pointer group"
+                onClick={() => {
+                  navigator.clipboard.writeText(roomCode)
+                  osdShow('Code copié')
+                }}
+              >
+                <span className="text-white/90 text-lg font-mono tracking-widest">
+                  {roomCode}
                 </span>
                 <span className="text-white/30 text-[10px] group-hover:text-white/60 transition-colors">
                   copier
@@ -346,7 +523,6 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
 
             {chatOpen && (
               <div className="mt-2 space-y-2">
-                {/* Message list */}
                 <div
                   className="overflow-y-auto space-y-1"
                   style={{ maxHeight: '150px' }}
@@ -365,7 +541,6 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
                   <div ref={chatEndRef} />
                 </div>
 
-                {/* Chat input */}
                 <div className="flex gap-1.5">
                   <input
                     type="text"

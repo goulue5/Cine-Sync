@@ -48,12 +48,24 @@ const mpvBridge = {
   downloadSubtitle: (fileId: number) =>
     ipcRenderer.invoke('subs:download', fileId),
 
-  // Watch Together
+  // Watch Together (LAN)
   syncHost: (port?: number) => ipcRenderer.invoke('sync:host', port),
   syncJoin: (host: string, port: number, name: string) => ipcRenderer.invoke('sync:join', host, port, name),
   syncSend: (action: 'pause' | 'play' | 'seek', time?: number) => ipcRenderer.invoke('sync:send', action, time),
+  syncSendState: (playing: boolean, time: number) => ipcRenderer.invoke('sync:sendState', playing, time),
   syncStop: () => ipcRenderer.invoke('sync:stop'),
   syncStatus: () => ipcRenderer.invoke('sync:status'),
+
+  // Watch Together (Online relay)
+  relayCreate: (serverUrl: string, name: string): Promise<{ ok: boolean; code: string }> =>
+    ipcRenderer.invoke('relay:create', serverUrl, name),
+  relayJoin: (serverUrl: string, code: string, name: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('relay:join', serverUrl, code, name),
+  onSyncStateRequest: (cb: () => void): (() => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('sync:state-request', handler)
+    return () => ipcRenderer.removeListener('sync:state-request', handler)
+  },
   onSyncAction: (cb: (msg: unknown) => void): (() => void) => {
     const handler = (_: Electron.IpcRendererEvent, msg: unknown) => cb(msg)
     ipcRenderer.on('sync:action', handler)

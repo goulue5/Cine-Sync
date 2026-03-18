@@ -6,9 +6,11 @@ import { MpvEvent } from '../mpv/mpvTypes'
 import { savePosition, getResumePosition, getRecentFiles } from '../resumeStore'
 import { searchSubtitles, downloadSubtitle, computeFileHash } from '../subtitles/opensubtitles'
 import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
+import { WatchTogetherRelay } from '../sync/watchTogetherRelay'
 
 let syncHost: WatchTogetherHost | null = null
 let syncClient: WatchTogetherClient | null = null
+let syncRelay: WatchTogetherRelay | null = null
 
 const OBS = {
   TIME_POS: 1,
@@ -186,6 +188,7 @@ export function registerMainHandlers(
   ipcMain.handle('sync:send', (_e, action: 'pause' | 'play' | 'seek', time?: number) => {
     if (syncHost?.isRunning) syncHost.sendSync(action, time)
     else if (syncClient?.isConnected) syncClient.sendSync(action, time)
+    else if (syncRelay?.isConnected) syncRelay.sendSync(action, time)
   })
 
   ipcMain.handle('sync:sendChat', (_e, text: string) => {
@@ -195,7 +198,13 @@ export function registerMainHandlers(
       if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
     } else if (syncClient?.isConnected) {
       syncClient.sendChat(text)
+    } else if (syncRelay?.isConnected) {
+      syncRelay.sendChat(text)
     }
+  })
+
+  ipcMain.handle('sync:sendState', (_e, playing: boolean, time: number) => {
+    if (syncRelay?.isConnected) syncRelay.sendState(playing, time)
   })
 
   ipcMain.handle('sync:getLocalIP', () => {
@@ -215,12 +224,88 @@ export function registerMainHandlers(
     syncHost = null
     syncClient?.disconnect()
     syncClient = null
+    syncRelay?.disconnect()
+    syncRelay = null
   })
 
   ipcMain.handle('sync:status', () => {
     if (syncHost?.isRunning) return { role: 'host', users: syncHost.userCount }
     if (syncClient?.isConnected) return { role: 'client' }
+    if (syncRelay?.isConnected) return { role: 'relay', code: syncRelay.code }
     return { role: null }
+  })
+
+  // ── Watch Together Online (relay) ─────────────────────────────────────
+  ipcMain.handle('relay:create', async (_e, serverUrl: string, name: string) => {
+    syncRelay = new WatchTogetherRelay(serverUrl, name)
+    try {
+      const code = await syncRelay.createRoom()
+      await syncRelay.connect(code)
+
+      syncRelay.on('sync', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+      })
+      syncRelay.on('users', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:users', msg.users ?? [])
+      })
+      syncRelay.on('join', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:user-joined', msg.name ?? 'Guest')
+      })
+      syncRelay.on('leave', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:user-left', msg.name ?? 'Guest')
+      })
+      syncRelay.on('chat', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
+      })
+      syncRelay.on('state-request', () => {
+        if (!win.isDestroyed()) win.webContents.send('sync:state-request')
+      })
+      syncRelay.on('disconnected', () => {
+        if (!win.isDestroyed()) win.webContents.send('sync:disconnected')
+      })
+
+      return { ok: true, code }
+    } catch (err) {
+      syncRelay = null
+      throw err
+    }
+  })
+
+  ipcMain.handle('relay:join', async (_e, serverUrl: string, code: string, name: string) => {
+    syncRelay = new WatchTogetherRelay(serverUrl, name)
+    try {
+      const exists = await syncRelay.checkRoom(code)
+      if (!exists) throw new Error('Room introuvable')
+
+      await syncRelay.connect(code)
+
+      syncRelay.on('sync', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+      })
+      syncRelay.on('users', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:users', msg.users ?? [])
+      })
+      syncRelay.on('join', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:user-joined', msg.name ?? 'Guest')
+      })
+      syncRelay.on('leave', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:user-left', msg.name ?? 'Guest')
+      })
+      syncRelay.on('chat', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:chat', msg)
+      })
+      syncRelay.on('state', (msg: SyncMessage) => {
+        if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
+      })
+      syncRelay.on('disconnected', () => {
+        if (!win.isDestroyed()) win.webContents.send('sync:disconnected')
+      })
+
+      return { ok: true }
+    } catch (err) {
+      syncRelay = null
+      throw err
+    }
   })
 
   // ── Multiple files dialog (playlist) ──────────────────────────────────
@@ -320,6 +405,8 @@ export function unregisterMainHandlers(): void {
   syncHost = null
   syncClient?.disconnect()
   syncClient = null
+  syncRelay?.disconnect()
+  syncRelay = null
 
   const channels = [
     'mpv:loadFile', 'mpv:play', 'mpv:pause', 'mpv:togglePause',
@@ -332,7 +419,8 @@ export function unregisterMainHandlers(): void {
     'history:getRecent',
     'dialog:openSubtitle', 'dialog:openFiles',
     'subs:search', 'subs:download',
-    'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:getLocalIP', 'sync:stop', 'sync:status',
+    'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:sendState', 'sync:getLocalIP', 'sync:stop', 'sync:status',
+    'relay:create', 'relay:join',
   ]
   for (const ch of channels) {
     ipcMain.removeHandler(ch)

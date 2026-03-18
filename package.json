@@ -46,8 +46,8 @@
     "vite": "^6.0.0"
   },
   "build": {
-    "appId": "com.lecteurfilm.app",
-    "productName": "LecteurFilm",
+    "appId": "com.cinesync.app",
+    "productName": "Cine-Sync",
     "directories": {
       "output": "dist"
     },
@@ -78,15 +78,6 @@
         "role": "Viewer"
       }
     ],
-    "extraResources": [
-      {
-        "from": "./resources/mpv/",
-        "to": "mpv/",
-        "filter": [
-          "mpv.exe"
-        ]
-      }
-    ],
     "win": {
       "target": [
         {
@@ -107,10 +98,10 @@
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
-      "shortcutName": "LecteurFilm"
+      "shortcutName": "Cine-Sync"
     },
     "portable": {
-      "artifactName": "LecteurFilm-portable-${version}.exe"
+      "artifactName": "CineSync-portable-${version}.exe"
     },
     "mac": {
       "target": [

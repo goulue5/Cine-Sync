@@ -61,8 +61,6 @@ export function SettingsPanel(): React.ReactElement {
   const currentAid = usePlayerStore(s => s.currentAid)
   const currentSid = usePlayerStore(s => s.currentSid)
   const speed = usePlayerStore(s => s.speed)
-  const subDelay = usePlayerStore(s => s.subDelay)
-  const audioDelay = usePlayerStore(s => s.audioDelay)
   const setSettingsOpen = usePlayerStore(s => s.setSettingsOpen)
 
   const audioTracks = trackList.filter(t => t.type === 'audio')
@@ -82,14 +80,6 @@ export function SettingsPanel(): React.ReactElement {
     videoEngine.setSpeed(s)
     osdShow(`Vitesse : ${s}x`)
   }, [osdShow])
-
-  const adjustSubDelay = useCallback((_delta: number) => {
-    // Sub delay not supported with HTML5 video
-  }, [])
-
-  const adjustAudioDelay = useCallback((_delta: number) => {
-    // Audio delay not supported with HTML5 video
-  }, [])
 
   const handleLoadSubtitle = useCallback(async () => {
     try {
@@ -222,28 +212,6 @@ export function SettingsPanel(): React.ReactElement {
         </div>
       </Section>
 
-      {/* Subtitle delay */}
-      <Section title={`Décalage sous-titres (${subDelay > 0 ? '+' : ''}${subDelay.toFixed(1)}s)`}>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <DelayButton label="−0.5" onClick={() => adjustSubDelay(-0.5)} />
-          <DelayButton label="−0.1" onClick={() => adjustSubDelay(-0.1)} />
-          <DelayButton label="Reset" onClick={() => window.mpvBridge.setSubDelay(0)} />
-          <DelayButton label="+0.1" onClick={() => adjustSubDelay(0.1)} />
-          <DelayButton label="+0.5" onClick={() => adjustSubDelay(0.5)} />
-        </div>
-      </Section>
-
-      {/* Audio delay */}
-      <Section title={`Décalage audio (${audioDelay > 0 ? '+' : ''}${audioDelay.toFixed(1)}s)`}>
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <DelayButton label="−0.5" onClick={() => adjustAudioDelay(-0.5)} />
-          <DelayButton label="−0.1" onClick={() => adjustAudioDelay(-0.1)} />
-          <DelayButton label="Reset" onClick={() => window.mpvBridge.setAudioDelay(0)} />
-          <DelayButton label="+0.1" onClick={() => adjustAudioDelay(0.1)} />
-          <DelayButton label="+0.5" onClick={() => adjustAudioDelay(0.5)} />
-        </div>
-      </Section>
-
       {/* Video filters */}
       <VideoFilters osdShow={osdShow} />
 
@@ -277,7 +245,7 @@ function VideoFilters({ osdShow }: { osdShow: (msg: string) => void }): React.Re
     const reset = { brightness: 0, contrast: 0, saturation: 0, gamma: 0 }
     setValues(reset)
     for (const [key, val] of Object.entries(reset)) {
-      window.mpvBridge.setProperty(key, val)
+      videoEngine.setProperty(key, val)
     }
     osdShow('Filtres réinitialisés')
   }, [osdShow])
@@ -385,28 +353,5 @@ function ThemePicker(): React.ReactElement {
         ))}
       </div>
     </Section>
-  )
-}
-
-function DelayButton({ label, onClick }: { label: string; onClick: () => void }): React.ReactElement {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: '5px 2px',
-        borderRadius: '4px',
-        border: 'none',
-        background: 'rgba(255,255,255,0.06)',
-        color: 'rgba(255,255,255,0.55)',
-        fontSize: '10px',
-        cursor: 'pointer',
-        ...MONO,
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-    >
-      {label}
-    </button>
   )
 }

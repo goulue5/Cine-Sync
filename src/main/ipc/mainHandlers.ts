@@ -47,7 +47,9 @@ export function registerMainHandlers(win: BrowserWindow): void {
       if (filePath.toLowerCase().endsWith('.srt')) {
         content = 'WEBVTT\n\n' + content
           .replace(/\r\n/g, '\n')
+          .replace(/^\d+\s*$/gm, '')
           .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+          .trim()
       }
       return { content, fileName: filePath.split('/').pop() ?? filePath.split('\\').pop() ?? 'subtitle' }
     } catch (err) {
@@ -78,7 +80,9 @@ export function registerMainHandlers(win: BrowserWindow): void {
       if (result.filePath.toLowerCase().endsWith('.srt')) {
         content = 'WEBVTT\n\n' + content
           .replace(/\r\n/g, '\n')
+          .replace(/^\d+\s*$/gm, '')
           .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+          .trim()
       }
       return { ...result, vttContent: content }
     } catch (err) {

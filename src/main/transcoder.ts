@@ -1,38 +1,38 @@
-import { spawn, execSync, ChildProcess } from 'child_process'
+import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { createServer, Server, IncomingMessage, ServerResponse } from 'http'
+import { existsSync } from 'fs'
 
 let server: Server | null = null
 let serverPort: number | null = null
 let currentProcess: ChildProcess | null = null
 
-function findFfmpeg(): string {
-  const paths = [
-    '/opt/homebrew/bin/ffmpeg',
-    '/usr/local/bin/ffmpeg',
-    '/usr/bin/ffmpeg',
-    'ffmpeg',
+function findBinary(name: string): string {
+  const candidates = [
+    `/opt/homebrew/bin/${name}`,
+    `/usr/local/bin/${name}`,
+    `/usr/bin/${name}`,
   ]
-  return paths[0]
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  return name // fallback to PATH
+}
+
+function findFfmpeg(): string {
+  return findBinary('ffmpeg')
 }
 
 function findFfprobe(): string {
-  const paths = [
-    '/opt/homebrew/bin/ffprobe',
-    '/usr/local/bin/ffprobe',
-    '/usr/bin/ffprobe',
-    'ffprobe',
-  ]
-  return paths[0]
+  return findBinary('ffprobe')
 }
 
-/** Get duration in seconds using ffprobe */
+/** Get duration in seconds using ffprobe (safe, no shell) */
 function probeDuration(filePath: string): number {
   try {
-    const result = execSync(
-      `"${findFfprobe()}" -v quiet -print_format json -show_format "${filePath}"`,
-      { encoding: 'utf8', timeout: 10000 }
-    )
-    const json = JSON.parse(result)
+    const result = spawnSync(findFfprobe(), [
+      '-v', 'quiet', '-print_format', 'json', '-show_format', filePath,
+    ], { encoding: 'utf8', timeout: 10000 })
+    const json = JSON.parse(result.stdout)
     return parseFloat(json.format?.duration ?? '0')
   } catch {
     return 0

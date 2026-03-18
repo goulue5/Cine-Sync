@@ -4,6 +4,7 @@
  */
 
 let videoEl: HTMLVideoElement | null = null
+const subtitleBlobUrls: string[] = []
 
 // CSS filter values
 const filters = { brightness: 0, contrast: 0, saturation: 0, gamma: 0 }
@@ -36,6 +37,7 @@ export const videoEngine = {
 
   loadFile(filePath: string): void {
     if (!videoEl) return
+    this.clearSubtitles()
     videoEl.src = `file://${filePath}`
     videoEl.load()
   },
@@ -126,14 +128,23 @@ export const videoEngine = {
     if (!videoEl) return
     const blob = new Blob([vttContent], { type: 'text/vtt' })
     const url = URL.createObjectURL(blob)
+    subtitleBlobUrls.push(url)
     const track = document.createElement('track')
     track.kind = 'subtitles'
     track.label = label
     track.srclang = lang
     track.src = url
     videoEl.appendChild(track)
-    // Activate the new track
     track.track.mode = 'showing'
+  },
+
+  /** Remove all external subtitle tracks and free blob URLs */
+  clearSubtitles(): void {
+    if (!videoEl) return
+    const tracks = videoEl.querySelectorAll('track')
+    tracks.forEach(t => t.remove())
+    for (const url of subtitleBlobUrls) URL.revokeObjectURL(url)
+    subtitleBlobUrls.length = 0
   },
 
   // ── Filters (CSS) ────────────────────────────────────────────────────

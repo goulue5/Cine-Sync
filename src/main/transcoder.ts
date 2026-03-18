@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, execSync, ChildProcess } from 'child_process'
 import { createServer, Server, IncomingMessage, ServerResponse } from 'http'
 
 let server: Server | null = null
@@ -6,14 +6,37 @@ let serverPort: number | null = null
 let currentProcess: ChildProcess | null = null
 
 function findFfmpeg(): string {
-  // Common paths on macOS/Linux
   const paths = [
     '/opt/homebrew/bin/ffmpeg',
     '/usr/local/bin/ffmpeg',
     '/usr/bin/ffmpeg',
-    'ffmpeg', // rely on PATH
+    'ffmpeg',
   ]
-  return paths[0] // On macOS with homebrew, this is the most common
+  return paths[0]
+}
+
+function findFfprobe(): string {
+  const paths = [
+    '/opt/homebrew/bin/ffprobe',
+    '/usr/local/bin/ffprobe',
+    '/usr/bin/ffprobe',
+    'ffprobe',
+  ]
+  return paths[0]
+}
+
+/** Get duration in seconds using ffprobe */
+function probeDuration(filePath: string): number {
+  try {
+    const result = execSync(
+      `"${findFfprobe()}" -v quiet -print_format json -show_format "${filePath}"`,
+      { encoding: 'utf8', timeout: 10000 }
+    )
+    const json = JSON.parse(result)
+    return parseFloat(json.format?.duration ?? '0')
+  } catch {
+    return 0
+  }
 }
 
 function handleStream(req: IncomingMessage, res: ServerResponse): void {
@@ -112,6 +135,19 @@ export function startTranscoder(): Promise<number> {
         res.end()
         return
       }
+
+      const url = new URL(req.url ?? '/', 'http://localhost')
+
+      // GET /info?path=... → return real duration
+      if (url.pathname === '/info') {
+        const filePath = url.searchParams.get('path')
+        if (!filePath) { res.writeHead(400); res.end(); return }
+        const duration = probeDuration(filePath)
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify({ duration }))
+        return
+      }
+
       handleStream(req, res)
     })
 

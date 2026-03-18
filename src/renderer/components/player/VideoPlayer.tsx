@@ -9,6 +9,7 @@ export function VideoPlayer(): React.ReactElement {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileName = usePlayerStore(s => s.fileName)
   const triedTranscoder = useRef(false)
+  const realDuration = useRef<number>(0)
 
   // Attach/detach the video element to the engine
   useEffect(() => {
@@ -38,6 +39,8 @@ export function VideoPlayer(): React.ReactElement {
       store.setState({ timePos: video.currentTime })
     }
     const onDurationChange = () => {
+      // Don't overwrite real duration when in transcoder mode
+      if (realDuration.current > 0) return
       store.setState({ duration: video.duration || 0 })
     }
     const onPlay = () => {
@@ -65,8 +68,9 @@ export function VideoPlayer(): React.ReactElement {
     const onLoadStart = () => {
       store.setState({ isLoading: true, eofReached: false })
       triedTranscoder.current = false
+      realDuration.current = 0
     }
-    const tryTranscoderFallback = () => {
+    const tryTranscoderFallback = async () => {
       const filePath = store.getState().filePath
       if (filePath && transcoderPort && !triedTranscoder.current) {
         triedTranscoder.current = true
@@ -74,9 +78,33 @@ export function VideoPlayer(): React.ReactElement {
         store.setState({ isLoading: true, mpvError: null })
         const parts = filePath.split('/')
         store.setState({ fileName: parts[parts.length - 1] || null })
+
+        // Get real duration from ffprobe before starting transcode
+        try {
+          const infoRes = await fetch(`http://127.0.0.1:${transcoderPort}/info?path=${encodeURIComponent(filePath)}`)
+          const info = await infoRes.json()
+          if (info.duration > 0) {
+            realDuration.current = info.duration
+            store.setState({ duration: info.duration })
+          }
+        } catch { /* ignore */ }
+
         video.src = `http://127.0.0.1:${transcoderPort}/stream?path=${encodeURIComponent(filePath)}`
         video.load()
         video.play().catch(() => {})
+      }
+    }
+
+    // Fires before loadeddata — check if video track is decodable
+    const onLoadedMetadata = () => {
+      if (triedTranscoder.current) return
+
+      // videoWidth === 0 means no video frames can be decoded (unsupported codec/pixel format)
+      if (video.videoWidth === 0) {
+        console.log('[VideoPlayer] videoWidth=0 at metadata, codec not supported natively')
+        video.pause()
+        tryTranscoderFallback()
+        return
       }
     }
 
@@ -94,14 +122,6 @@ export function VideoPlayer(): React.ReactElement {
           store.setState({ fileName: name || null })
         }
       } catch { /* ignore */ }
-
-      // Check if video frames are actually rendering
-      // Chromium sometimes plays audio but can't decode video (unsupported pixel format)
-      setTimeout(() => {
-        if (!triedTranscoder.current && video.videoWidth === 0 && video.currentTime > 0) {
-          tryTranscoderFallback()
-        }
-      }, 1000)
 
       // Check for resume position
       const filePath = store.getState().filePath
@@ -136,6 +156,7 @@ export function VideoPlayer(): React.ReactElement {
     video.addEventListener('ratechange', onRateChange)
     video.addEventListener('ended', onEnded)
     video.addEventListener('loadstart', onLoadStart)
+    video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('loadeddata', onLoadedData)
     video.addEventListener('error', onError)
 
@@ -148,6 +169,7 @@ export function VideoPlayer(): React.ReactElement {
       video.removeEventListener('ratechange', onRateChange)
       video.removeEventListener('ended', onEnded)
       video.removeEventListener('loadstart', onLoadStart)
+      video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('loadeddata', onLoadedData)
       video.removeEventListener('error', onError)
     }

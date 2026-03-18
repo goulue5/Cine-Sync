@@ -8,3 +8,5 @@ dist/
 resources/mpv/mpv.exe
 resources/mpv/*.dll
 .env
+V1.md
+V2.md

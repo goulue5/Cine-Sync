@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, dialog } from 'electron'
 import * as os from 'os'
 import * as fs from 'fs'
 import { savePosition, getResumePosition, getRecentFiles } from '../resumeStore'
+import { remuxAudio } from '../audioRemux'
 import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
 import { WatchTogetherRelay } from '../sync/watchTogetherRelay'
 
@@ -54,6 +55,17 @@ export function registerMainHandlers(win: BrowserWindow): void {
     } catch (err) {
       console.error('[subs] read error:', err)
       throw err
+    }
+  })
+
+  // ── Audio remux (DTS/AC3 → AAC) ────────────────────────────────────
+  ipcMain.handle('audio:remux', async (_e, filePath: string) => {
+    try {
+      const remuxedPath = await remuxAudio(filePath)
+      return { ok: true, path: remuxedPath }
+    } catch (err) {
+      console.error('[remux] error:', err)
+      return { ok: false }
     }
   })
 
@@ -258,7 +270,7 @@ export function unregisterMainHandlers(): void {
     'resume:getPosition', 'resume:savePosition',
     'history:getRecent',
     'dialog:openSubtitle', 'dialog:openFiles',
-    'subs:readFile',
+    'subs:readFile', 'audio:remux',
     'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:sendState', 'sync:getLocalIP', 'sync:stop', 'sync:status',
     'relay:create', 'relay:join',
   ]

@@ -63,6 +63,7 @@ export function PlayerShell(): React.ReactElement {
 
   // ── Scroll wheel → volume ─────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (usePlayerStore.getState().settingsOpen) return
     e.preventDefault()
     const delta = e.deltaY < 0 ? 5 : -5
     const newVol = Math.max(0, Math.min(100, usePlayerStore.getState().volume + delta))
@@ -84,9 +85,9 @@ export function PlayerShell(): React.ReactElement {
       switch (e.code) {
         case 'Space': {
           e.preventDefault()
+          const wasPlaying = usePlayerStore.getState().isPlaying
           videoEngine.togglePause()
-          const paused = usePlayerStore.getState().isPlaying
-          osdShow(paused ? 'Pause' : 'Lecture')
+          osdShow(wasPlaying ? 'Pause' : 'Lecture')
           showControls()
           break
         }

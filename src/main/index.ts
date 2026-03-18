@@ -3,7 +3,6 @@ import { join } from 'path'
 import * as fs from 'fs'
 import { registerMainHandlers, unregisterMainHandlers } from './ipc/mainHandlers'
 import { loadResumeStore } from './resumeStore'
-import { startTranscoder, stopTranscoder } from './transcoder'
 
 const IS_MAC = process.platform === 'darwin'
 
@@ -134,13 +133,13 @@ async function createWindow(): Promise<void> {
     mainWin.show()
     mainWin.focus()
 
-    // Prevent screen from sleeping during playback
-    powerSaveId = powerSaveBlocker.start('prevent-display-sleep')
-
-    // Start transcoder server for unsupported codecs (ProRes, etc.)
-    startTranscoder().then((port) => {
-      mainWin.webContents.send('transcoder:port', port)
-    }).catch((err) => console.error('[main] transcoder failed:', err))
+    // Power save blocker — only during playback
+    ipcMain.on('player:playing', () => {
+      if (powerSaveId === null) powerSaveId = powerSaveBlocker.start('prevent-display-sleep')
+    })
+    ipcMain.on('player:paused', () => {
+      if (powerSaveId !== null) { powerSaveBlocker.stop(powerSaveId); powerSaveId = null }
+    })
 
     // Register IPC handlers for subtitles, sync, resume, etc.
     registerMainHandlers(mainWin)
@@ -159,7 +158,6 @@ async function createWindow(): Promise<void> {
   // ── Lifecycle ──────────────────────────────────────────────────────
   mainWin.on('closed', () => {
     if (powerSaveId !== null) powerSaveBlocker.stop(powerSaveId)
-    stopTranscoder()
     unregisterMainHandlers()
     for (const ch of ['window:minimize', 'window:maximize', 'window:close', 'window:isFullscreen', 'window:pip', 'window:isPip', 'theme:get', 'theme:set', 'dialog:openFile']) {
       ipcMain.removeHandler(ch)

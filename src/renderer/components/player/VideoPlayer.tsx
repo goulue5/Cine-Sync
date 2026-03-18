@@ -2,14 +2,9 @@ import React, { useRef, useEffect } from 'react'
 import { videoEngine } from '../../video/videoEngine'
 import { usePlayerStore } from '../../store/playerStore'
 
-// Transcoder port (set by main process when ffmpeg server starts)
-let transcoderPort: number | null = null
-
 export function VideoPlayer(): React.ReactElement {
   const videoRef = useRef<HTMLVideoElement>(null)
   const fileName = usePlayerStore(s => s.fileName)
-  const triedTranscoder = useRef(false)
-  const realDuration = useRef<number>(0)
 
   // Attach/detach the video element to the engine
   useEffect(() => {
@@ -17,15 +12,6 @@ export function VideoPlayer(): React.ReactElement {
       videoEngine.attach(videoRef.current)
     }
     return () => videoEngine.detach()
-  }, [])
-
-  // Listen for transcoder port from main process
-  useEffect(() => {
-    const cleanup = window.mpvBridge.onTranscoderPort((port) => {
-      transcoderPort = port
-      console.log(`[VideoPlayer] transcoder available on port ${port}`)
-    })
-    return cleanup
   }, [])
 
   // Connect DOM events → store
@@ -36,18 +22,22 @@ export function VideoPlayer(): React.ReactElement {
     const store = usePlayerStore
 
     const onTimeUpdate = () => {
-      store.setState({ timePos: video.currentTime })
+      const t = video.currentTime
+      if (isFinite(t)) store.setState({ timePos: t })
     }
     const onDurationChange = () => {
-      // Don't overwrite real duration when in transcoder mode
-      if (realDuration.current > 0) return
-      store.setState({ duration: video.duration || 0 })
+      const d = video.duration
+      if (d && isFinite(d) && d > 0) {
+        store.setState({ duration: d })
+      }
     }
     const onPlay = () => {
       store.setState({ isPlaying: true })
+      window.mpvBridge.notifyPlaying()
     }
     const onPause = () => {
       store.setState({ isPlaying: false })
+      window.mpvBridge.notifyPaused()
     }
     const onVolumeChange = () => {
       store.setState({
@@ -66,62 +56,30 @@ export function VideoPlayer(): React.ReactElement {
       }
     }
     const onLoadStart = () => {
-      store.setState({ isLoading: true, eofReached: false })
-      triedTranscoder.current = false
-      realDuration.current = 0
+      store.setState({ isLoading: true, eofReached: false, mpvError: null })
     }
-    const tryTranscoderFallback = async () => {
-      const filePath = store.getState().filePath
-      if (filePath && transcoderPort && !triedTranscoder.current) {
-        triedTranscoder.current = true
-        console.log('[VideoPlayer] no video frames, trying ffmpeg transcoder...')
-        store.setState({ isLoading: true, mpvError: null })
-        const parts = filePath.split('/')
-        store.setState({ fileName: parts[parts.length - 1] || null })
-
-        // Get real duration from ffprobe before starting transcode
-        try {
-          const infoRes = await fetch(`http://127.0.0.1:${transcoderPort}/info?path=${encodeURIComponent(filePath)}`)
-          const info = await infoRes.json()
-          if (info.duration > 0) {
-            realDuration.current = info.duration
-            store.setState({ duration: info.duration })
-          }
-        } catch { /* ignore */ }
-
-        video.src = `http://127.0.0.1:${transcoderPort}/stream?path=${encodeURIComponent(filePath)}`
-        video.load()
-        video.play().catch(() => {})
-      }
-    }
-
-    // Fires before loadeddata — check if video track is decodable
     const onLoadedMetadata = () => {
-      if (triedTranscoder.current) return
-
-      // videoWidth === 0 means no video frames can be decoded (unsupported codec/pixel format)
-      if (video.videoWidth === 0) {
-        console.log('[VideoPlayer] videoWidth=0 at metadata, codec not supported natively')
-        video.pause()
-        tryTranscoderFallback()
-        return
-      }
+      // Extract file name from src
+      try {
+        const decoded = decodeURIComponent(video.src)
+        const parts = decoded.split('/')
+        const name = parts[parts.length - 1]
+        if (name) store.setState({ fileName: name })
+      } catch { /* ignore */ }
     }
-
     const onLoadedData = () => {
       store.setState({ isLoading: false, mpvError: null })
       video.play().catch(() => {})
 
-      // Extract file name from src
-      try {
-        const src = video.src
-        const decoded = decodeURIComponent(src)
-        const parts = decoded.split('/')
-        const name = parts[parts.length - 1]
-        if (!name.startsWith('stream')) {
-          store.setState({ fileName: name || null })
+      // Extract subtitle tracks
+      setTimeout(() => {
+        const tracks: import('../../store/playerStore').MpvTrack[] = []
+        for (let i = 0; i < video.textTracks.length; i++) {
+          const t = video.textTracks[i]
+          tracks.push({ id: i + 1, type: 'sub', title: t.label || undefined, lang: t.language || undefined })
         }
-      } catch { /* ignore */ }
+        if (tracks.length > 0) store.setState({ trackList: tracks })
+      }, 500)
 
       // Check for resume position
       const filePath = store.getState().filePath
@@ -129,23 +87,41 @@ export function VideoPlayer(): React.ReactElement {
         window.mpvBridge.getResumePosition(filePath).then((pos) => {
           if (pos && pos > 0) {
             video.currentTime = pos
-            console.log(`[VideoPlayer] resumed at ${pos}s`)
           }
         }).catch(() => {})
       }
+
+      // After 1.5s: check if audio is actually playing (DTS/AC3 won't decode)
+      setTimeout(async () => {
+        const v = video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }
+        if (v.webkitAudioDecodedByteCount !== undefined && v.webkitAudioDecodedByteCount === 0 && video.currentTime > 0.5) {
+          const fp = store.getState().filePath
+          if (!fp) return
+          console.log('[VideoPlayer] no audio decoded, remuxing audio to AAC...')
+          store.setState({ isLoading: true })
+          const result = await window.mpvBridge.remuxAudio(fp)
+          if (result.ok && result.path) {
+            const currentTime = video.currentTime
+            video.src = `file://${result.path}`
+            video.load()
+            video.currentTime = currentTime
+            video.play().catch(() => {})
+            store.setState({ isLoading: false })
+            console.log('[VideoPlayer] switched to remuxed file with AAC audio')
+          } else {
+            store.setState({ isLoading: false })
+          }
+        }
+      }, 1500)
     }
     const onError = () => {
       const err = video.error
       if (!err) return
-
-      // Try ffmpeg transcoder fallback for unsupported codecs
-      if (!triedTranscoder.current) {
-        tryTranscoderFallback()
-        return
-      }
-
       console.error('[VideoPlayer] error:', err.message)
-      store.setState({ mpvError: `Erreur de lecture : ${err.message}` })
+      store.setState({
+        isLoading: false,
+        mpvError: `Format non supporté.\nEssayez un fichier MP4 ou MKV (H.264 + AAC).`,
+      })
     }
 
     video.addEventListener('timeupdate', onTimeUpdate)
@@ -181,7 +157,7 @@ export function VideoPlayer(): React.ReactElement {
       const video = videoRef.current
       if (!video || !video.src || video.paused) return
       const { filePath } = usePlayerStore.getState()
-      if (filePath && video.duration > 0) {
+      if (filePath && video.duration > 0 && isFinite(video.duration)) {
         window.mpvBridge.savePosition(filePath, video.currentTime, video.duration)
       }
     }, 5000)

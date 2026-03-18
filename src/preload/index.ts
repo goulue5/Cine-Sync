@@ -95,12 +95,13 @@ const mpvBridge = {
   getTheme: (): Promise<string> => ipcRenderer.invoke('theme:get'),
   setTheme: (color: string) => ipcRenderer.invoke('theme:set', color),
 
-  // ── Transcoder ───────────────────────────────────────────────────────
-  onTranscoderPort: (cb: (port: number) => void): (() => void) => {
-    const handler = (_: Electron.IpcRendererEvent, port: number) => cb(port)
-    ipcRenderer.on('transcoder:port', handler)
-    return () => ipcRenderer.removeListener('transcoder:port', handler)
-  },
+  // ── Audio remux (DTS/AC3 → AAC)
+  remuxAudio: (filePath: string): Promise<{ ok: boolean; path?: string }> =>
+    ipcRenderer.invoke('audio:remux', filePath),
+
+  // ── Power save (notify main process of playback state)
+  notifyPlaying: () => ipcRenderer.send('player:playing'),
+  notifyPaused: () => ipcRenderer.send('player:paused'),
 
   // ── External file (double-click / Open With) ────────────────────────
   onExternalFile: (cb: (filePath: string) => void): (() => void) => {

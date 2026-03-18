@@ -26,6 +26,7 @@ export const videoEngine = {
   },
 
   detach(): void {
+    this.clearSubtitles()
     videoEl = null
   },
 

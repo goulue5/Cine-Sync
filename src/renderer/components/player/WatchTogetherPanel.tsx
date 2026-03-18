@@ -173,8 +173,13 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
         window.mpvBridge.syncSend(state.isPlaying ? 'play' : 'pause')
       }
       const timeDelta = Math.abs(state.timePos - prevTime)
-      if (timeDelta > 2 && state.timePos > 0) window.mpvBridge.syncSend('seek', state.timePos)
-      prevTime = state.timePos
+      // Only sync seek on large jumps (user-initiated scrub, not natural playback)
+      if (timeDelta > 5 && state.timePos > 0) {
+        window.mpvBridge.syncSend('seek', state.timePos)
+        prevTime = state.timePos
+      } else if (timeDelta <= 5) {
+        prevTime = state.timePos
+      }
     })
     return unsub
   }, [role])

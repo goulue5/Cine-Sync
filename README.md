@@ -5,6 +5,15 @@ Lecteur video desktop open source avec Watch Together integre.
 ![macOS](https://img.shields.io/badge/macOS-supported-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
+## Telecharger
+
+**[Telecharger Cine-Sync pour macOS](https://github.com/goulue5/Cine-Sync/releases/latest)**
+
+- **Mac Apple Silicon** (M1, M2, M3, M4) → `Cine-Sync-0.1.0-arm64.dmg`
+- **Mac Intel** → `Cine-Sync-0.1.0.dmg`
+
+> Ouvrir le DMG, glisser l'app dans Applications. Si macOS affiche "app non identifiee" → clic droit > Ouvrir.
+
 ## Features
 
 - Lecture video (MP4, MKV, WebM, AVI, MOV + fallback ffmpeg pour ProRes et codecs exotiques)

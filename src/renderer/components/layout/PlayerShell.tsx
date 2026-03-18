@@ -237,7 +237,7 @@ export function PlayerShell(): React.ReactElement {
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'transparent' }}
             aria-label="Agrandir"
           >
-            <svg width="8" height="8" viewBox="0 0 8 8"><path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1" /></svg>
+            <svg width="8" height="8" viewBox="0 0 8 8"><path d="M1 3L1 1L3 1M5 7L7 7L7 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /></svg>
           </button>
           <button
             onClick={() => window.mpvBridge.windowClose()}

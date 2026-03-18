@@ -1,20 +1,22 @@
 import { app, BrowserWindow, shell, globalShortcut, dialog, ipcMain, screen, powerSaveBlocker } from 'electron'
 import { join } from 'path'
+import * as fs from 'fs'
 import { registerMainHandlers, unregisterMainHandlers } from './ipc/mainHandlers'
 import { loadResumeStore } from './resumeStore'
 import { startTranscoder, stopTranscoder } from './transcoder'
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Store = require('electron-store').default || require('electron-store')
-
 const IS_MAC = process.platform === 'darwin'
-
 
 // Load saved playback positions
 loadResumeStore()
 
-// Persistent settings
-const settingsStore = new Store({ name: 'settings' })
+// Simple JSON settings (replaces electron-store)
+const settingsPath = join(app.getPath('userData'), 'settings.json')
+let settings: Record<string, unknown> = {}
+try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) } catch { settings = {} }
+function saveSettings(): void {
+  try { fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf8') } catch { /* ignore */ }
+}
 
 // Prevent display sleep during playback
 let powerSaveId: number | null = null
@@ -85,9 +87,10 @@ async function createWindow(): Promise<void> {
   ipcMain.handle('window:isPip', () => pipActive)
 
   // ── Theme ───────────────────────────────────────────────────────────
-  ipcMain.handle('theme:get', () => settingsStore.get('accentColor', 'blue'))
+  ipcMain.handle('theme:get', () => settings.accentColor ?? 'blue')
   ipcMain.handle('theme:set', (_e: Electron.IpcMainInvokeEvent, color: string) => {
-    settingsStore.set('accentColor', color)
+    settings.accentColor = color
+    saveSettings()
   })
 
   // ── DevTools ────────────────────────────────────────────────────────

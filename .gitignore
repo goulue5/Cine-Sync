@@ -7,3 +7,4 @@ dist/
 # See README for download link
 resources/mpv/mpv.exe
 resources/mpv/*.dll
+.env

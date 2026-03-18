@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 
 interface MediaInfo {
   videoCodec: string
@@ -33,7 +34,7 @@ function formatFileSize(bytes: number): string {
 }
 
 async function fetchMediaInfo(): Promise<MediaInfo> {
-  const get = (prop: string) => window.mpvBridge.getProperty(prop).catch(() => null)
+  const get = (prop: string) => videoEngine.getProperty(prop).catch(() => null)
 
   const [
     videoCodec, audioCodec, width, height, fps,

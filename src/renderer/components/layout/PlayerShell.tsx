@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
-import { useMpv } from '../../hooks/useMpv'
+import { videoEngine } from '../../video/videoEngine'
+import { VideoPlayer } from '../player/VideoPlayer'
 import { DragZone } from '../player/DragZone'
 import { ControlBar } from '../player/ControlBar'
 import { SettingsPanel } from '../player/SettingsPanel'
@@ -12,8 +13,6 @@ import { WatchTogetherPanel } from '../player/WatchTogetherPanel'
 const CONTROLS_HIDE_DELAY = 3000
 
 export function PlayerShell(): React.ReactElement {
-  useMpv()
-
   const controlsVisible = usePlayerStore(s => s.controlsVisible)
   const setControlsVisible = usePlayerStore(s => s.setControlsVisible)
   const fileName = usePlayerStore(s => s.fileName)
@@ -29,6 +28,16 @@ export function PlayerShell(): React.ReactElement {
   // Track fullscreen state from main process
   useEffect(() => {
     const cleanup = window.mpvBridge.onFullscreenChanged((fs) => setIsFullscreen(fs))
+    return cleanup
+  }, [])
+
+  // Listen for external file opens (double-click / "Open With")
+  useEffect(() => {
+    const cleanup = window.mpvBridge.onExternalFile((filePath) => {
+      if (filePath) {
+        usePlayerStore.getState().loadPlaylist([filePath], 0)
+      }
+    })
     return cleanup
   }, [])
 
@@ -54,31 +63,30 @@ export function PlayerShell(): React.ReactElement {
     }
   }, [fileName, setControlsVisible, showControls])
 
-  // ── Scroll wheel → volume ─────────────────────────────────────────────────
+  // ── Scroll wheel → volume ─────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
     const delta = e.deltaY < 0 ? 5 : -5
-    const newVol = Math.max(0, Math.min(130, usePlayerStore.getState().volume + delta))
-    window.mpvBridge.setVolume(newVol)
+    const newVol = Math.max(0, Math.min(100, usePlayerStore.getState().volume + delta))
+    videoEngine.setVolume(newVol)
     osdShow(`Volume : ${newVol}%`)
     showControls()
   }, [showControls, osdShow])
 
-  // ── Double-click → fullscreen ─────────────────────────────────────────────
+  // ── Double-click → fullscreen ─────────────────────────────────────────
   const handleDoubleClick = useCallback(() => {
     window.mpvBridge.windowMaximize()
   }, [])
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  // ── Keyboard shortcuts ────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't capture if user is typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
       switch (e.code) {
         case 'Space': {
           e.preventDefault()
-          window.mpvBridge.togglePause()
+          videoEngine.togglePause()
           const paused = usePlayerStore.getState().isPlaying
           osdShow(paused ? 'Pause' : 'Lecture')
           showControls()
@@ -87,7 +95,7 @@ export function PlayerShell(): React.ReactElement {
         case 'ArrowRight': {
           e.preventDefault()
           const secs = e.shiftKey ? 30 : 5
-          window.mpvBridge.seek(secs, 'relative')
+          videoEngine.seek(secs, 'relative')
           osdShow(`Avancer +${secs}s`)
           showControls()
           break
@@ -95,15 +103,15 @@ export function PlayerShell(): React.ReactElement {
         case 'ArrowLeft': {
           e.preventDefault()
           const secs = e.shiftKey ? 30 : 5
-          window.mpvBridge.seek(-secs, 'relative')
+          videoEngine.seek(-secs, 'relative')
           osdShow(`Reculer -${secs}s`)
           showControls()
           break
         }
         case 'ArrowUp': {
           e.preventDefault()
-          const vol = Math.min(130, usePlayerStore.getState().volume + 5)
-          window.mpvBridge.setVolume(vol)
+          const vol = Math.min(100, usePlayerStore.getState().volume + 5)
+          videoEngine.setVolume(vol)
           osdShow(`Volume : ${vol}%`)
           showControls()
           break
@@ -111,14 +119,14 @@ export function PlayerShell(): React.ReactElement {
         case 'ArrowDown': {
           e.preventDefault()
           const vol = Math.max(0, usePlayerStore.getState().volume - 5)
-          window.mpvBridge.setVolume(vol)
+          videoEngine.setVolume(vol)
           osdShow(`Volume : ${vol}%`)
           showControls()
           break
         }
         case 'KeyM': {
           const muted = !usePlayerStore.getState().mute
-          window.mpvBridge.setMute(muted)
+          videoEngine.setMute(muted)
           osdShow(muted ? 'Son coupé' : 'Son activé')
           break
         }
@@ -171,31 +179,33 @@ export function PlayerShell(): React.ReactElement {
       onWheel={handleWheel}
       onDoubleClick={handleDoubleClick}
     >
+      {/* Video element — behind everything */}
+      <VideoPlayer />
+
       {/* Black background — ONLY when no video is loaded */}
       {!fileName && (
         <div className="absolute inset-0 bg-black" />
       )}
 
-      {/* OSD notifications (volume, seek, etc.) */}
+      {/* OSD notifications */}
       <OsdNotification />
 
-      {/* Media info overlay (toggle with I key) */}
+      {/* Media info overlay */}
       {mediaInfoOpen && fileName && (
         <MediaInfoPanel onClose={() => setMediaInfoOpen(false)} />
       )}
 
-      {/* Subtitle search (toggle with S key) */}
+      {/* Subtitle search */}
       {subSearchOpen && fileName && (
         <SubtitleSearchPanel onClose={() => setSubSearchOpen(false)} />
       )}
 
-      {/* Watch Together (toggle with W key) */}
+      {/* Watch Together */}
       {syncOpen && (
         <WatchTogetherPanel onClose={() => setSyncOpen(false)} />
       )}
 
-      {/* Title bar drag region + window controls (z-30, always visible)
-          background rgba(0,0,0,0.01) so transparent window still captures clicks */}
+      {/* Title bar drag region + window controls */}
       <div
         className="absolute top-0 left-0 right-0 z-30 flex items-center justify-end"
         style={{

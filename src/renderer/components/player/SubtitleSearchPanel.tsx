@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 import { useOsd } from './OsdNotification'
 
 interface SubResult {
@@ -61,7 +62,8 @@ export function SubtitleSearchPanel({ onClose }: SubtitleSearchPanelProps): Reac
   const handleDownload = useCallback(async (sub: SubResult) => {
     setDownloading(sub.fileId)
     try {
-      await window.mpvBridge.downloadSubtitle(sub.fileId)
+      const result = await window.mpvBridge.downloadSubtitle(sub.fileId)
+      await videoEngine.addSubtitle(result.vttContent, sub.fileName, sub.language)
       osdShow(`Sous-titres chargés : ${sub.language.toUpperCase()}`)
       onClose()
     } catch {

@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import { usePlayerStore, MpvTrack } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 import { useOsd } from './OsdNotification'
 import { useThemeStore, ACCENT_THEMES } from '../../store/themeStore'
 
@@ -68,33 +69,34 @@ export function SettingsPanel(): React.ReactElement {
   const subTracks = trackList.filter(t => t.type === 'sub')
 
   const handleAudioTrack = useCallback((id: number | 'no') => {
-    window.mpvBridge.setAudioTrack(id)
+    videoEngine.setAudioTrack(id)
   }, [])
 
   const handleSubTrack = useCallback((id: number | 'no') => {
-    window.mpvBridge.setSubtitleTrack(id)
+    videoEngine.setSubtitleTrack(id)
   }, [])
 
   const osdShow = useOsd((st) => st.show)
 
   const handleSpeed = useCallback((s: number) => {
-    window.mpvBridge.setSpeed(s)
+    videoEngine.setSpeed(s)
     osdShow(`Vitesse : ${s}x`)
   }, [osdShow])
 
-  const adjustSubDelay = useCallback((delta: number) => {
-    window.mpvBridge.setSubDelay(Math.round((subDelay + delta) * 10) / 10)
-  }, [subDelay])
+  const adjustSubDelay = useCallback((_delta: number) => {
+    // Sub delay not supported with HTML5 video
+  }, [])
 
-  const adjustAudioDelay = useCallback((delta: number) => {
-    window.mpvBridge.setAudioDelay(Math.round((audioDelay + delta) * 10) / 10)
-  }, [audioDelay])
+  const adjustAudioDelay = useCallback((_delta: number) => {
+    // Audio delay not supported with HTML5 video
+  }, [])
 
   const handleLoadSubtitle = useCallback(async () => {
     try {
       const path = await window.mpvBridge.openSubtitleFile()
       if (path) {
-        await window.mpvBridge.addSubtitle(path)
+        const { content, fileName } = await window.mpvBridge.readSubtitleFile(path)
+        await videoEngine.addSubtitle(content, fileName, 'fr')
       }
     } catch (err) {
       console.error('[SettingsPanel] failed to load subtitle:', err)
@@ -268,7 +270,7 @@ function VideoFilters({ osdShow }: { osdShow: (msg: string) => void }): React.Re
 
   const handleChange = useCallback((key: string, value: number) => {
     setValues(prev => ({ ...prev, [key]: value }))
-    window.mpvBridge.setProperty(key, value)
+    videoEngine.setProperty(key, value)
   }, [])
 
   const handleReset = useCallback(() => {

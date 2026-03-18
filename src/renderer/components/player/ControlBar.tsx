@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 import { SeekBar } from './SeekBar'
 import { VolumeControl } from './VolumeControl'
 
@@ -87,9 +88,9 @@ export function ControlBar(): React.ReactElement {
   const hasPrev = playlistIndex > 0
   const hasNext = playlistIndex < playlist.length - 1
 
-  const handleTogglePause = useCallback(() => window.mpvBridge.togglePause(), [])
-  const handleBack = useCallback(() => window.mpvBridge.seek(-10, 'relative'), [])
-  const handleForward = useCallback(() => window.mpvBridge.seek(10, 'relative'), [])
+  const handleTogglePause = useCallback(() => videoEngine.togglePause(), [])
+  const handleBack = useCallback(() => videoEngine.seek(-10, 'relative'), [])
+  const handleForward = useCallback(() => videoEngine.seek(10, 'relative'), [])
 
   const handleOpenFiles = useCallback(async () => {
     try {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 import { useOsd } from './OsdNotification'
 
 interface SyncAction {
@@ -58,16 +59,16 @@ export function WatchTogetherPanel({ onClose }: WatchTogetherPanelProps): React.
       if (msg.type === 'sync') {
         switch (msg.action) {
           case 'pause':
-            window.mpvBridge.pause()
+            videoEngine.pause()
             osdShow('Pause (sync)')
             break
           case 'play':
-            window.mpvBridge.play()
+            videoEngine.play()
             osdShow('Lecture (sync)')
             break
           case 'seek':
             if (msg.time !== undefined) {
-              window.mpvBridge.seek(msg.time, 'absolute')
+              videoEngine.seek(msg.time, 'absolute')
               osdShow(`Seek (sync)`)
             }
             break

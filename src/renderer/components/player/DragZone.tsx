@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 
 const SUPPORTED_VIDEO_EXTENSIONS = new Set([
   '.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm',
@@ -89,7 +90,8 @@ export function DragZone(): React.ReactElement {
     // Load subtitle files
     for (const subPath of subtitlePaths) {
       try {
-        await window.mpvBridge.addSubtitle(subPath)
+        const { content, fileName: subName } = await window.mpvBridge.readSubtitleFile(subPath)
+        await videoEngine.addSubtitle(content, subName, 'fr')
         console.log('[DragZone] subtitle added:', subPath)
       } catch (err) {
         console.error('[DragZone] failed to add subtitle:', err)
@@ -238,7 +240,7 @@ export function DragZone(): React.ReactElement {
             </svg>
           </div>
           <p style={{ color: 'rgba(248,113,113,0.9)', fontSize: '14px', fontWeight: 500, marginBottom: '10px' }}>
-            mpv introuvable
+            Erreur
           </p>
           <p style={{
             color: 'rgba(255,255,255,0.35)',

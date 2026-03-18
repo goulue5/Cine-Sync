@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 
 function VolumeIcon({ level }: { level: 'off' | 'low' | 'high' }): React.ReactElement {
   if (level === 'off') {
@@ -29,17 +30,17 @@ export function VolumeControl(): React.ReactElement {
   const [hovering, setHovering] = useState(false)
 
   const toggleMute = useCallback(() => {
-    window.mpvBridge.setMute(!mute)
+    videoEngine.setMute(!mute)
   }, [mute])
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10)
-    window.mpvBridge.setVolume(val)
-    if (mute && val > 0) window.mpvBridge.setMute(false)
+    videoEngine.setVolume(val)
+    if (mute && val > 0) videoEngine.setMute(false)
   }, [mute])
 
   const display = mute ? 0 : volume
-  const fillPct = Math.min((display / 130) * 100, 100)
+  const fillPct = Math.min(display, 100)
   const level = mute || volume === 0 ? 'off' : volume < 60 ? 'low' : 'high'
 
   return (
@@ -55,14 +56,12 @@ export function VolumeControl(): React.ReactElement {
         <VolumeIcon level={level} />
       </button>
 
-      {/* Slider */}
       <div
         className="relative flex items-center cursor-pointer"
         style={{ width: '68px', height: '20px' }}
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
       >
-        {/* Rail */}
         <div
           className="absolute inset-x-0 rounded-full transition-all duration-150"
           style={{
@@ -82,7 +81,6 @@ export function VolumeControl(): React.ReactElement {
           />
         </div>
 
-        {/* Thumb */}
         <div
           className="absolute rounded-full pointer-events-none"
           style={{
@@ -100,7 +98,7 @@ export function VolumeControl(): React.ReactElement {
         <input
           type="range"
           min={0}
-          max={130}
+          max={100}
           step={1}
           value={display}
           onChange={handleChange}

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { videoEngine } from '../video/videoEngine'
 
 export interface MpvTrack {
   id: number
@@ -123,19 +124,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setMpvError: (v) => set({ mpvError: v }),
 
-  // ── Playlist actions ────────────────────────────────────────────────────
+  // ── Playlist actions — use videoEngine directly ───────────────────────
   loadPlaylist: (files, startIndex = 0) => {
     if (files.length === 0) return
-    set({ playlist: files, playlistIndex: startIndex, isLoading: true })
-    window.mpvBridge.loadFile(files[startIndex])
+    const filePath = files[startIndex]
+    set({ playlist: files, playlistIndex: startIndex, isLoading: true, filePath, fileName: null, mpvError: null })
+    videoEngine.loadFile(filePath)
   },
 
   playNext: () => {
     const { playlist, playlistIndex } = get()
     if (playlistIndex < playlist.length - 1) {
       const next = playlistIndex + 1
-      set({ playlistIndex: next, isLoading: true })
-      window.mpvBridge.loadFile(playlist[next])
+      const filePath = playlist[next]
+      set({ playlistIndex: next, isLoading: true, filePath })
+      videoEngine.loadFile(filePath)
     }
   },
 
@@ -143,16 +146,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const { playlist, playlistIndex } = get()
     if (playlistIndex > 0) {
       const prev = playlistIndex - 1
-      set({ playlistIndex: prev, isLoading: true })
-      window.mpvBridge.loadFile(playlist[prev])
+      const filePath = playlist[prev]
+      set({ playlistIndex: prev, isLoading: true, filePath })
+      videoEngine.loadFile(filePath)
     }
   },
 
   playIndex: (index) => {
     const { playlist } = get()
     if (index >= 0 && index < playlist.length) {
-      set({ playlistIndex: index, isLoading: true })
-      window.mpvBridge.loadFile(playlist[index])
+      const filePath = playlist[index]
+      set({ playlistIndex: index, isLoading: true, filePath })
+      videoEngine.loadFile(filePath)
     }
   },
 }))

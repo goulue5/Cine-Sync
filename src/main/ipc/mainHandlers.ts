@@ -1,8 +1,6 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import * as os from 'os'
-import { MpvCommandQueue } from '../mpv/MpvCommandQueue'
-import { MpvIpcClient } from '../mpv/MpvIpcClient'
-import { MpvEvent } from '../mpv/mpvTypes'
+import * as fs from 'fs'
 import { savePosition, getResumePosition, getRecentFiles } from '../resumeStore'
 import { searchSubtitles, downloadSubtitle, computeFileHash } from '../subtitles/opensubtitles'
 import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
@@ -12,83 +10,14 @@ let syncHost: WatchTogetherHost | null = null
 let syncClient: WatchTogetherClient | null = null
 let syncRelay: WatchTogetherRelay | null = null
 
-const OBS = {
-  TIME_POS: 1,
-  PAUSE: 2,
-  DURATION: 3,
-  VOLUME: 4,
-  MUTE: 5,
-  FILENAME: 6,
-  EOF_REACHED: 7,
-  TRACK_LIST: 8,
-  AID: 9,
-  SID: 10,
-  SPEED: 11,
-  SUB_DELAY: 12,
-  AUDIO_DELAY: 13,
-  PATH: 14,
-  CHAPTER_LIST: 15,
-  CHAPTER: 16,
-} as const
-
-// ── Resume playback state ───────────────────────────────────────────────────
-let currentFilePath: string | null = null
-let currentTimePos = 0
-let currentDuration = 0
-let lastSaveTime = 0
-const SAVE_INTERVAL_MS = 5000
-
-export function registerMainHandlers(
-  win: BrowserWindow,
-  client: MpvIpcClient,
-  cmd: MpvCommandQueue
-): void {
-  // ── Playback ────────────────────────────────────────────────────────────
-  ipcMain.handle('mpv:loadFile', (_e, filePath: string) => {
-    // Save position of previous file before loading new one
-    if (currentFilePath && currentDuration > 0) {
-      savePosition(currentFilePath, currentTimePos, currentDuration)
-    }
-    currentFilePath = filePath
-    currentTimePos = 0
-    currentDuration = 0
-    return cmd.loadFile(filePath)
-  })
-  ipcMain.handle('mpv:play', () => cmd.play())
-  ipcMain.handle('mpv:pause', () => cmd.pause())
-  ipcMain.handle('mpv:togglePause', () => cmd.togglePause())
-  ipcMain.handle('mpv:seek', (_e, seconds: number, mode: 'absolute' | 'relative') =>
-    cmd.seek(seconds, mode)
-  )
-  ipcMain.handle('mpv:setVolume', (_e, volume: number) => cmd.setVolume(volume))
-  ipcMain.handle('mpv:setMute', (_e, mute: boolean) => cmd.setMute(mute))
-  ipcMain.handle('mpv:stop', () => {
-    // Save position before stopping
-    if (currentFilePath && currentDuration > 0) {
-      savePosition(currentFilePath, currentTimePos, currentDuration)
-    }
-    currentFilePath = null
-    return cmd.stop()
-  })
-  ipcMain.handle('mpv:getProperty', (_e, name: string) => cmd.getProperty(name))
-  ipcMain.handle('mpv:setProperty', (_e, name: string, value: string | number | boolean) => cmd.setProperty(name, value))
-
-  // ── Tracks ──────────────────────────────────────────────────────────────
-  ipcMain.handle('mpv:getTrackList', () => cmd.getTrackList())
-  ipcMain.handle('mpv:setAudioTrack', (_e, id: number | 'auto' | 'no') => cmd.setAudioTrack(id))
-  ipcMain.handle('mpv:setSubtitleTrack', (_e, id: number | 'auto' | 'no') => cmd.setSubtitleTrack(id))
-
-  // ── Subtitles ─────────────────────────────────────────────────────────
-  ipcMain.handle('mpv:addSubtitle', (_e, filePath: string) => cmd.addSubtitle(filePath))
-
-  // ── Playback options ──────────────────────────────────────────────────
-  ipcMain.handle('mpv:setSpeed', (_e, speed: number) => cmd.setSpeed(speed))
-  ipcMain.handle('mpv:setSubDelay', (_e, seconds: number) => cmd.setSubDelay(seconds))
-  ipcMain.handle('mpv:setAudioDelay', (_e, seconds: number) => cmd.setAudioDelay(seconds))
-
+export function registerMainHandlers(win: BrowserWindow): void {
   // ── Resume playback ───────────────────────────────────────────────────
-  ipcMain.handle('mpv:getResumePosition', (_e, filePath: string) => {
+  ipcMain.handle('resume:getPosition', (_e, filePath: string) => {
     return getResumePosition(filePath)
+  })
+
+  ipcMain.handle('resume:savePosition', (_e, filePath: string, position: number, duration: number) => {
+    savePosition(filePath, position, duration)
   })
 
   // ── Recent files ───────────────────────────────────────────────────
@@ -110,6 +39,23 @@ export function registerMainHandlers(
     return result.canceled ? null : (result.filePaths[0] ?? null)
   })
 
+  // ── Read subtitle file and convert SRT → VTT ─────────────────────────
+  ipcMain.handle('subs:readFile', (_e, filePath: string) => {
+    try {
+      let content = fs.readFileSync(filePath, 'utf8')
+      // SRT → VTT conversion
+      if (filePath.toLowerCase().endsWith('.srt')) {
+        content = 'WEBVTT\n\n' + content
+          .replace(/\r\n/g, '\n')
+          .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+      }
+      return { content, fileName: filePath.split('/').pop() ?? filePath.split('\\').pop() ?? 'subtitle' }
+    } catch (err) {
+      console.error('[subs] read error:', err)
+      throw err
+    }
+  })
+
   // ── Subtitle search (OpenSubtitles) ──────────────────────────────────
   ipcMain.handle('subs:search', async (_e, query: string, filePath?: string) => {
     try {
@@ -127,22 +73,26 @@ export function registerMainHandlers(
   ipcMain.handle('subs:download', async (_e, fileId: number) => {
     try {
       const result = await downloadSubtitle(fileId)
-      // Load subtitle into mpv
-      await cmd.addSubtitle(result.filePath)
-      return result
+      // Read the downloaded file and convert to VTT
+      let content = fs.readFileSync(result.filePath, 'utf8')
+      if (result.filePath.toLowerCase().endsWith('.srt')) {
+        content = 'WEBVTT\n\n' + content
+          .replace(/\r\n/g, '\n')
+          .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+      }
+      return { ...result, vttContent: content }
     } catch (err) {
       console.error('[subs] download error:', err)
       throw err
     }
   })
 
-  // ── Watch Together ───────────────────────────────────────────────────
+  // ── Watch Together (LAN) ──────────────────────────────────────────────
   ipcMain.handle('sync:host', async (_e, port?: number) => {
     if (syncHost?.isRunning) return { ok: true, port }
     syncHost = new WatchTogetherHost(port ?? 9876)
     const actualPort = await syncHost.start()
 
-    // Forward sync actions from clients → renderer
     syncHost.on('sync', (msg: SyncMessage) => {
       if (!win.isDestroyed()) win.webContents.send('sync:action', msg)
     })
@@ -326,81 +276,7 @@ export function registerMainHandlers(
   })
 }
 
-export async function setupObservers(
-  client: MpvIpcClient,
-  cmd: MpvCommandQueue,
-  win: BrowserWindow
-): Promise<void> {
-  try {
-    await cmd.observeProperty(OBS.TIME_POS, 'time-pos')
-    await cmd.observeProperty(OBS.PAUSE, 'pause')
-    await cmd.observeProperty(OBS.DURATION, 'duration')
-    await cmd.observeProperty(OBS.VOLUME, 'volume')
-    await cmd.observeProperty(OBS.MUTE, 'mute')
-    await cmd.observeProperty(OBS.FILENAME, 'filename')
-    await cmd.observeProperty(OBS.EOF_REACHED, 'eof-reached')
-    await cmd.observeProperty(OBS.TRACK_LIST, 'track-list')
-    await cmd.observeProperty(OBS.AID, 'aid')
-    await cmd.observeProperty(OBS.SID, 'sid')
-    await cmd.observeProperty(OBS.SPEED, 'speed')
-    await cmd.observeProperty(OBS.SUB_DELAY, 'sub-delay')
-    await cmd.observeProperty(OBS.AUDIO_DELAY, 'audio-delay')
-    await cmd.observeProperty(OBS.PATH, 'path')
-    await cmd.observeProperty(OBS.CHAPTER_LIST, 'chapter-list')
-    await cmd.observeProperty(OBS.CHAPTER, 'chapter')
-  } catch (err) {
-    console.error('[ipc] failed to setup observers:', err)
-  }
-
-  client.on('mpv-event', (event: MpvEvent) => {
-    // ── Resume: save position periodically ────────────────────────────
-    if (event.event === 'property-change') {
-      const e = event as { event: string; name: string; data: unknown }
-
-      if (e.name === 'time-pos' && typeof e.data === 'number') {
-        currentTimePos = e.data
-        const now = Date.now()
-        if (currentFilePath && currentDuration > 0 && now - lastSaveTime > SAVE_INTERVAL_MS) {
-          lastSaveTime = now
-          savePosition(currentFilePath, currentTimePos, currentDuration)
-        }
-      }
-
-      if (e.name === 'duration' && typeof e.data === 'number') {
-        currentDuration = e.data
-      }
-
-      if (e.name === 'path' && typeof e.data === 'string') {
-        currentFilePath = e.data
-      }
-    }
-
-    // ── Resume: seek to saved position on file load ───────────────────
-    if (event.event === 'file-loaded' && currentFilePath) {
-      const resumePos = getResumePosition(currentFilePath)
-      if (resumePos !== null && resumePos > 0) {
-        console.log(`[ipc] resuming ${currentFilePath} at ${resumePos}s`)
-        cmd.seek(resumePos, 'absolute').catch(() => {})
-        // Notify renderer about resume
-        if (!win.isDestroyed()) {
-          win.webContents.send('mpv:resumed', { position: resumePos })
-        }
-      }
-    }
-
-    // ── Forward all events to renderer ────────────────────────────────
-    if (!win.isDestroyed()) {
-      win.webContents.send('mpv:event', event)
-    }
-  })
-}
-
 export function unregisterMainHandlers(): void {
-  // Save final position on cleanup
-  if (currentFilePath && currentDuration > 0) {
-    savePosition(currentFilePath, currentTimePos, currentDuration)
-  }
-  // Clean up sync
   syncHost?.stop()
   syncHost = null
   syncClient?.disconnect()
@@ -409,16 +285,10 @@ export function unregisterMainHandlers(): void {
   syncRelay = null
 
   const channels = [
-    'mpv:loadFile', 'mpv:play', 'mpv:pause', 'mpv:togglePause',
-    'mpv:seek', 'mpv:setVolume', 'mpv:setMute', 'mpv:stop',
-    'mpv:getProperty', 'mpv:setProperty',
-    'mpv:getTrackList', 'mpv:setAudioTrack', 'mpv:setSubtitleTrack',
-    'mpv:addSubtitle',
-    'mpv:setSpeed', 'mpv:setSubDelay', 'mpv:setAudioDelay',
-    'mpv:getResumePosition',
+    'resume:getPosition', 'resume:savePosition',
     'history:getRecent',
     'dialog:openSubtitle', 'dialog:openFiles',
-    'subs:search', 'subs:download',
+    'subs:readFile', 'subs:search', 'subs:download',
     'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:sendState', 'sync:getLocalIP', 'sync:stop', 'sync:status',
     'relay:create', 'relay:join',
   ]

@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useRef } from 'react'
 import { usePlayerStore } from '../../store/playerStore'
+import { videoEngine } from '../../video/videoEngine'
 
 const MONO: React.CSSProperties = {
   fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", monospace',
@@ -27,7 +28,7 @@ export function SeekBar(): React.ReactElement {
   const progress = duration > 0 ? Math.min(timePos / duration, 1) : 0
 
   const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    window.mpvBridge.seek(parseFloat(e.target.value), 'absolute')
+    videoEngine.seek(parseFloat(e.target.value), 'absolute')
   }, [])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {

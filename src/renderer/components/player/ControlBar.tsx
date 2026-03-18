@@ -4,33 +4,19 @@ import { videoEngine } from '../../video/videoEngine'
 import { SeekBar } from './SeekBar'
 import { VolumeControl } from './VolumeControl'
 
-function SettingsIcon(): React.ReactElement {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-    </svg>
-  )
-}
-
-const MONO: React.CSSProperties = {
-  fontFamily: 'ui-monospace, SFMono-Regular, "Cascadia Mono", monospace',
-  letterSpacing: '0.04em',
-}
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
+/* ── Icons ────────────────────────────────────────────────────────────── */
 
 function PlayIcon(): React.ReactElement {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M7.5 4.5v15L20 12z" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5v14l11-7z" />
     </svg>
   )
 }
 
 function PauseIcon(): React.ReactElement {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
       <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
     </svg>
   )
@@ -38,7 +24,7 @@ function PauseIcon(): React.ReactElement {
 
 function PrevIcon(): React.ReactElement {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
     </svg>
   )
@@ -46,34 +32,59 @@ function PrevIcon(): React.ReactElement {
 
 function NextIcon(): React.ReactElement {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <path d="M6 18l8.5-6L6 6v12zm2.5-6l8.5 6V6z" transform="translate(-2, 0)" />
       <path d="M16 6h2v12h-2z" />
     </svg>
   )
 }
 
-function Skip10BackIcon(): React.ReactElement {
+/* ── Shared button component ──────────────────────────────────────────── */
+
+function ControlButton({ onClick, disabled, label, title, children, size = 36 }: {
+  onClick: () => void; disabled?: boolean; label: string; title?: string
+  children: React.ReactNode; size?: number
+}): React.ReactElement {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
-      <text x="7.5" y="16.5" fontSize="6" fontWeight="600" fontFamily="system-ui" textAnchor="middle" fill="currentColor">10</text>
-    </svg>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={title}
+      style={{
+        width: size, height: size, borderRadius: size > 40 ? '50%' : 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: disabled ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.5)',
+        background: 'transparent', border: 'none',
+        cursor: disabled ? 'default' : 'pointer',
+        transition: 'all 0.15s',
+        flexShrink: 0,
+      }}
+      onMouseEnter={e => {
+        if (disabled) return
+        e.currentTarget.style.color = 'rgba(255,255,255,0.95)'
+        e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.color = disabled ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.5)'
+        e.currentTarget.style.background = 'transparent'
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
-function Skip10ForwardIcon(): React.ReactElement {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
-      <text x="16.5" y="16.5" fontSize="6" fontWeight="600" fontFamily="system-ui" textAnchor="middle" fill="currentColor">10</text>
-    </svg>
-  )
+/* ── Component ────────────────────────────────────────────────────────── */
+
+interface ControlBarProps {
+  onToggleSubtitles?: () => void
+  onToggleWatchTogether?: () => void
+  subtitlesOpen?: boolean
+  watchTogetherOpen?: boolean
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
-export function ControlBar(): React.ReactElement {
+export function ControlBar({ onToggleSubtitles, onToggleWatchTogether, subtitlesOpen, watchTogetherOpen }: ControlBarProps): React.ReactElement {
   const isPlaying = usePlayerStore(s => s.isPlaying)
   const fileName = usePlayerStore(s => s.fileName)
   const settingsOpen = usePlayerStore(s => s.settingsOpen)
@@ -95,193 +106,209 @@ export function ControlBar(): React.ReactElement {
   const handleOpenFiles = useCallback(async () => {
     try {
       const paths = await window.mpvBridge.openFiles()
-      if (paths.length > 0) {
-        loadPlaylist(paths)
-      }
-    } catch { /* dialog cancelled */ }
+      if (paths.length > 0) loadPlaylist(paths)
+    } catch { /* cancelled */ }
   }, [loadPlaylist])
 
   return (
-    <div className="w-full flex flex-col" style={{ padding: '0 20px 18px' }}>
-      {/* Seek bar row */}
-      <div style={{ marginBottom: '10px' }}>
+    <div style={{ width: '100%', padding: '0 24px 20px' }}>
+      {/* Seek bar */}
+      <div style={{ marginBottom: 14 }}>
         <SeekBar />
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
 
-        {/* ── Prev button ── */}
-        {playlist.length > 1 && (
-          <button
-            onClick={playPrev}
-            disabled={!hasPrev}
-            className="flex items-center justify-center rounded-lg transition-colors duration-150"
-            style={{
-              width: '30px', height: '30px',
-              color: hasPrev ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)',
-              cursor: hasPrev ? 'pointer' : 'default',
-            }}
-            onMouseEnter={e => { if (hasPrev) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' } }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = hasPrev ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            aria-label="Piste précédente"
-          >
-            <PrevIcon />
-          </button>
-        )}
+        {/* ── Left: playback controls ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* Prev */}
+          {playlist.length > 1 && (
+            <ControlButton onClick={playPrev} disabled={!hasPrev} label="Piste précédente" size={32}>
+              <PrevIcon />
+            </ControlButton>
+          )}
 
-        {/* ── Playback cluster ── */}
-        <div className="flex items-center" style={{ gap: '2px' }}>
           {/* Skip back */}
-          <button
-            onClick={handleBack}
-            className="flex items-center justify-center rounded-lg transition-colors duration-150"
-            style={{ width: '34px', height: '34px', color: 'rgba(255,255,255,0.45)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            aria-label="Reculer de 10 secondes"
-          >
-            <Skip10BackIcon />
-          </button>
+          <ControlButton onClick={handleBack} label="Reculer 10s" size={36}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+              <text x="12" y="15.5" fontSize="7" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle" fontFamily="system-ui">10</text>
+            </svg>
+          </ControlButton>
 
-          {/* Play / Pause — primary button, larger */}
+          {/* Play / Pause — hero button */}
           <button
             onClick={handleTogglePause}
-            className="flex items-center justify-center rounded-full transition-all duration-150"
-            style={{
-              width: '42px',
-              height: '42px',
-              color: '#fff',
-              background: 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 20%, transparent)',
-              margin: '0 4px',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 35%, transparent)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent, rgb(255,255,255)) 20%, transparent)' }}
             aria-label={isPlaying ? 'Pause' : 'Lecture'}
+            style={{
+              width: 48, height: 48, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', border: 'none', cursor: 'pointer',
+              background: 'var(--accent, rgb(59,130,246))',
+              margin: '0 4px',
+              transition: 'all 0.2s',
+              boxShadow: '0 4px 16px color-mix(in srgb, var(--accent, rgb(59,130,246)) 35%, transparent)',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'scale(1.06)'
+              e.currentTarget.style.boxShadow = '0 6px 24px color-mix(in srgb, var(--accent, rgb(59,130,246)) 50%, transparent)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.boxShadow = '0 4px 16px color-mix(in srgb, var(--accent, rgb(59,130,246)) 35%, transparent)'
+            }}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
 
           {/* Skip forward */}
-          <button
-            onClick={handleForward}
-            className="flex items-center justify-center rounded-lg transition-colors duration-150"
-            style={{ width: '34px', height: '34px', color: 'rgba(255,255,255,0.45)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            aria-label="Avancer de 10 secondes"
-          >
-            <Skip10ForwardIcon />
-          </button>
+          <ControlButton onClick={handleForward} label="Avancer 10s" size={36}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10" />
+              <text x="12" y="15.5" fontSize="7" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle" fontFamily="system-ui">10</text>
+            </svg>
+          </ControlButton>
+
+          {/* Next */}
+          {playlist.length > 1 && (
+            <ControlButton onClick={playNext} disabled={!hasNext} label="Piste suivante" size={32}>
+              <NextIcon />
+            </ControlButton>
+          )}
         </div>
 
-        {/* ── Next button ── */}
-        {playlist.length > 1 && (
-          <button
-            onClick={playNext}
-            disabled={!hasNext}
-            className="flex items-center justify-center rounded-lg transition-colors duration-150"
-            style={{
-              width: '30px', height: '30px',
-              color: hasNext ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)',
-              cursor: hasNext ? 'pointer' : 'default',
-            }}
-            onMouseEnter={e => { if (hasNext) { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' } }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = hasNext ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.15)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            aria-label="Piste suivante"
-          >
-            <NextIcon />
-          </button>
-        )}
-
-        {/* Volume — left of center */}
-        <div style={{ marginLeft: '8px' }}>
+        {/* Volume */}
+        <div style={{ marginLeft: 8 }}>
           <VolumeControl />
         </div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+        {/* ── Center: file info ── */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 0 }}>
+          {fileName && (
+            <span style={{
+              color: 'rgba(255,255,255,0.25)', fontSize: 12, fontWeight: 400,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              maxWidth: 240,
+            }} title={fileName}>
+              {fileName}
+            </span>
+          )}
+          {Math.abs(speed - 1) > 0.01 && (
+            <span style={{
+              color: 'var(--accent, rgb(59,130,246))', fontSize: 10, fontWeight: 600,
+              fontFamily: 'ui-monospace, monospace',
+              background: 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 10%, transparent)',
+              padding: '2px 6px', borderRadius: 4,
+            }}>
+              {speed}x
+            </span>
+          )}
+          {playlist.length > 1 && (
+            <span style={{
+              color: 'rgba(255,255,255,0.2)', fontSize: 10,
+              fontFamily: 'ui-monospace, monospace',
+            }}>
+              {playlistIndex + 1}/{playlist.length}
+            </span>
+          )}
+        </div>
 
-        {/* Playlist position */}
-        {playlist.length > 1 && (
-          <span
-            className="text-xs"
-            style={{ ...MONO, color: 'rgba(255,255,255,0.3)', marginRight: '8px' }}
-          >
-            {playlistIndex + 1}/{playlist.length}
-          </span>
-        )}
+        {/* ── Right: tool buttons ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* Subtitles */}
+          {fileName && onToggleSubtitles && (
+            <button
+              onClick={onToggleSubtitles}
+              aria-label="Sous-titres"
+              title="Sous-titres (S)"
+              style={{
+                width: 34, height: 34, borderRadius: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: subtitlesOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)',
+                background: subtitlesOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent',
+                border: 'none', cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+              }}
+              onMouseEnter={e => { if (!subtitlesOpen) { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' } }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = subtitlesOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)'
+                e.currentTarget.style.background = subtitlesOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M7 12h4M13 12h4M7 16h10" />
+              </svg>
+            </button>
+          )}
 
-        {/* File name — right-aligned, muted */}
-        {fileName && (
-          <span
-            className="text-xs truncate"
-            style={{ ...MONO, color: 'rgba(255,255,255,0.22)', maxWidth: '200px' }}
-            title={fileName}
-          >
-            {fileName}
-          </span>
-        )}
+          {/* Watch Together */}
+          {onToggleWatchTogether && (
+            <button
+              onClick={onToggleWatchTogether}
+              aria-label="Watch Together"
+              title="Watch Together (W)"
+              style={{
+                width: 34, height: 34, borderRadius: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: watchTogetherOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)',
+                background: watchTogetherOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent',
+                border: 'none', cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+              }}
+              onMouseEnter={e => { if (!watchTogetherOpen) { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' } }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = watchTogetherOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)'
+                e.currentTarget.style.background = watchTogetherOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+              </svg>
+            </button>
+          )}
 
-        {/* Speed indicator */}
-        {Math.abs(speed - 1) > 0.01 && (
-          <span style={{ ...MONO, color: 'rgba(255,255,255,0.4)', fontSize: '11px', marginLeft: '4px' }}>
-            {speed}x
-          </span>
-        )}
+          {/* PiP */}
+          {fileName && (
+            <ControlButton onClick={() => window.mpvBridge.windowPip()} label="Picture-in-Picture" title="Picture-in-Picture (Alt+P)" size={34}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <rect x="11" y="9" width="9" height="7" rx="1" fill="currentColor" opacity="0.25" />
+              </svg>
+            </ControlButton>
+          )}
 
-        {/* PiP button */}
-        {fileName && (
+          {/* Settings */}
           <button
-            onClick={() => window.mpvBridge.windowPip()}
-            className="flex items-center justify-center rounded-lg transition-colors duration-150"
-            style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '4px', flexShrink: 0 }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-            aria-label="Picture-in-Picture"
-            title="Picture-in-Picture"
+            onClick={() => setSettingsOpen(!settingsOpen)}
+            aria-label="Paramètres"
+            title="Paramètres"
+            style={{
+              width: 34, height: 34, borderRadius: 10,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
+              background: settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: 'none', cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)'
+              e.currentTarget.style.background = settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent'
+            }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" />
-              <rect x="11" y="9" width="9" height="7" rx="1" fill="currentColor" opacity="0.3" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
             </svg>
           </button>
-        )}
 
-        {/* Settings button */}
-        <button
-          onClick={() => setSettingsOpen(!settingsOpen)}
-          className="flex items-center justify-center rounded-lg transition-colors duration-150"
-          style={{
-            width: '32px', height: '32px', flexShrink: 0, marginLeft: '4px',
-            color: settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
-            background: settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLElement).style.color = settingsOpen ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)'
-            ;(e.currentTarget as HTMLElement).style.background = settingsOpen ? 'rgba(255,255,255,0.08)' : 'transparent'
-          }}
-          aria-label="Paramètres"
-          title="Pistes audio, sous-titres, vitesse"
-        >
-          <SettingsIcon />
-        </button>
-
-        {/* Open file(s) button */}
-        <button
-          onClick={handleOpenFiles}
-          className="flex items-center justify-center rounded-lg transition-colors duration-150"
-          style={{ width: '32px', height: '32px', color: 'rgba(255,255,255,0.35)', marginLeft: '4px', flexShrink: 0 }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-          aria-label="Ouvrir des fichiers"
-          title="Ouvrir des fichiers"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
-          </svg>
-        </button>
+          {/* Open files */}
+          <ControlButton onClick={handleOpenFiles} label="Ouvrir des fichiers" title="Ouvrir" size={34}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+            </svg>
+          </ControlButton>
+        </div>
       </div>
     </div>
   )

@@ -209,55 +209,70 @@ export function PlayerShell(): React.ReactElement {
       <div
         className="absolute top-0 left-0 right-0 z-30 flex items-center justify-end"
         style={{
-          height: '32px',
+          height: '38px',
           background: 'rgba(0,0,0,0.01)',
           // @ts-expect-error WebkitAppRegion is valid in Electron
           WebkitAppRegion: 'drag',
         }}
       >
         <div
-          className="flex items-center"
           style={{
+            display: 'flex', alignItems: 'center', gap: 6, paddingRight: 12,
             // @ts-expect-error WebkitAppRegion
             WebkitAppRegion: 'no-drag',
           }}
         >
           <button
             onClick={() => window.mpvBridge.windowMinimize()}
-            className="flex items-center justify-center"
-            style={{ width: '46px', height: '32px', color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.01)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.01)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)' }}
+            style={{
+              width: 14, height: 14, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.1)', border: 'none',
+              cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgb(254,189,46)'; e.currentTarget.style.color = 'rgba(0,0,0,0.5)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'transparent' }}
             aria-label="Réduire"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" strokeWidth="1" /></svg>
+            <svg width="8" height="8" viewBox="0 0 8 8"><path d="M1 4h6" stroke="currentColor" strokeWidth="1.2" /></svg>
           </button>
           <button
             onClick={() => window.mpvBridge.windowMaximize()}
-            className="flex items-center justify-center"
-            style={{ width: '46px', height: '32px', color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.01)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.9)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.01)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)' }}
+            style={{
+              width: 14, height: 14, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.1)', border: 'none',
+              cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgb(39,201,63)'; e.currentTarget.style.color = 'rgba(0,0,0,0.5)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'transparent' }}
             aria-label="Agrandir"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1" /></svg>
+            <svg width="8" height="8" viewBox="0 0 8 8"><path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1" /></svg>
           </button>
           <button
             onClick={() => window.mpvBridge.windowClose()}
-            className="flex items-center justify-center"
-            style={{ width: '46px', height: '32px', color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.01)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(220,38,38,0.9)'; (e.currentTarget as HTMLElement).style.color = '#fff' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.01)'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)' }}
+            style={{
+              width: 14, height: 14, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.1)', border: 'none',
+              cursor: 'pointer', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgb(255,95,86)'; e.currentTarget.style.color = 'rgba(0,0,0,0.5)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'transparent' }}
             aria-label="Fermer"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1" /></svg>
+            <svg width="8" height="8" viewBox="0 0 8 8"><path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1.2" /></svg>
           </button>
         </div>
       </div>
 
       {/* DragZone — full area, z-10 */}
       <div className="absolute inset-0 z-10">
-        <DragZone />
+        <DragZone onOpenWatchTogether={() => setSyncOpen(v => !v)} />
       </div>
 
       {/* Settings panel — z-25 */}
@@ -276,7 +291,12 @@ export function PlayerShell(): React.ReactElement {
           background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.55) 45%, transparent 100%)',
         }}
       >
-        <ControlBar />
+        <ControlBar
+          onToggleSubtitles={() => { if (fileName) setSubSearchOpen(v => !v) }}
+          onToggleWatchTogether={() => setSyncOpen(v => !v)}
+          subtitlesOpen={subSearchOpen}
+          watchTogetherOpen={syncOpen}
+        />
       </div>
     </div>
   )

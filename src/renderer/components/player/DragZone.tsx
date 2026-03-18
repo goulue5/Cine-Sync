@@ -44,17 +44,55 @@ function formatDuration(seconds: number): string {
 function formatTimeAgo(timestamp: number): string {
   const diff = Date.now() - timestamp
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return "à l'instant"
-  if (mins < 60) return `il y a ${mins}min`
+  if (mins < 1) return "maintenant"
+  if (mins < 60) return `${mins}m`
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `il y a ${hours}h`
+  if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
   if (days === 1) return 'hier'
-  if (days < 30) return `il y a ${days}j`
-  return `il y a ${Math.floor(days / 30)} mois`
+  return `${days}j`
 }
 
-export function DragZone(): React.ReactElement {
+/* ── Styles ──────────────────────────────────────────────────────────── */
+
+const CSS = `
+  @keyframes dz-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes dz-glow {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+  .dz-recent-card {
+    transition: background 0.2s, transform 0.15s, border-color 0.2s;
+  }
+  .dz-recent-card:hover {
+    background: rgba(255,255,255,0.05) !important;
+    border-color: rgba(255,255,255,0.1) !important;
+    transform: translateY(-1px);
+  }
+  .dz-recent-card:hover .dz-play-icon {
+    opacity: 1 !important;
+    color: var(--accent, rgb(59,130,246)) !important;
+  }
+  .dz-open-btn {
+    transition: all 0.2s;
+  }
+  .dz-open-btn:hover {
+    background: var(--accent, rgb(59,130,246)) !important;
+    border-color: var(--accent, rgb(59,130,246)) !important;
+    color: #fff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--accent, rgb(59,130,246)) 30%, transparent);
+  }
+`
+
+interface DragZoneProps {
+  onOpenWatchTogether?: () => void
+}
+
+export function DragZone({ onOpenWatchTogether }: DragZoneProps = {}): React.ReactElement {
   const [isDragOver, setIsDragOver] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([])
@@ -63,7 +101,6 @@ export function DragZone(): React.ReactElement {
   const loadPlaylist = usePlayerStore(s => s.loadPlaylist)
   const dragCounter = useRef(0)
 
-  // Fetch recent files on mount (empty state only)
   useEffect(() => {
     if (!fileName && !mpvError) {
       window.mpvBridge.getRecentFiles().then(setRecentFiles).catch(() => {})
@@ -72,40 +109,28 @@ export function DragZone(): React.ReactElement {
 
   const handleFiles = useCallback(async (files: { path: string; name: string }[]) => {
     setLoadError(null)
-
     const videoPaths: string[] = []
     const subtitlePaths: string[] = []
 
     for (const file of files) {
       const filePath = file.path || file.name
       if (!filePath) continue
-
-      if (isVideoFile(filePath)) {
-        videoPaths.push(filePath)
-      } else if (isSubtitleFile(filePath)) {
-        subtitlePaths.push(filePath)
-      }
+      if (isVideoFile(filePath)) videoPaths.push(filePath)
+      else if (isSubtitleFile(filePath)) subtitlePaths.push(filePath)
     }
 
-    // Load subtitle files
     for (const subPath of subtitlePaths) {
       try {
         const { content, fileName: subName } = await window.mpvBridge.readSubtitleFile(subPath)
         await videoEngine.addSubtitle(content, subName, 'fr')
-        console.log('[DragZone] subtitle added:', subPath)
       } catch (err) {
-        console.error('[DragZone] failed to add subtitle:', err)
         setLoadError(`Erreur sous-titre: ${String(err)}`)
       }
     }
 
-    // Load video files as playlist
-    if (videoPaths.length > 0) {
-      loadPlaylist(videoPaths)
-    } else if (subtitlePaths.length === 0) {
-      // No supported files found
-      const names = files.map(f => f.name || f.path).join(', ')
-      setLoadError(`Format non supporté : ${names}`)
+    if (videoPaths.length > 0) loadPlaylist(videoPaths)
+    else if (subtitlePaths.length === 0) {
+      setLoadError(`Format non supporté`)
     }
   }, [loadPlaylist])
 
@@ -113,75 +138,36 @@ export function DragZone(): React.ReactElement {
     setLoadError(null)
     try {
       const paths = await window.mpvBridge.openFiles()
-      if (paths.length > 0) {
-        loadPlaylist(paths)
-      }
-    } catch (err) {
-      setLoadError(`Erreur dialog: ${String(err)}`)
-    }
+      if (paths.length > 0) loadPlaylist(paths)
+    } catch (err) { setLoadError(`Erreur: ${String(err)}`) }
   }, [loadPlaylist])
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current++
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current--
-    if (dragCounter.current === 0) setIsDragOver(false)
-  }, [])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-  }, [])
-
+  const handleDragEnter = useCallback((e: React.DragEvent) => { e.preventDefault(); dragCounter.current++; setIsDragOver(true) }, [])
+  const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); dragCounter.current--; if (dragCounter.current === 0) setIsDragOver(false) }, [])
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }, [])
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current = 0
-    setIsDragOver(false)
-
+    e.preventDefault(); dragCounter.current = 0; setIsDragOver(false)
     const droppedFiles = Array.from(e.dataTransfer.files).map(file => ({
-      path: (file as File & { path?: string }).path ?? '',
-      name: file.name,
+      path: (file as File & { path?: string }).path ?? '', name: file.name,
     }))
-
-    if (droppedFiles.length > 0) {
-      handleFiles(droppedFiles)
-    }
+    if (droppedFiles.length > 0) handleFiles(droppedFiles)
   }, [handleFiles])
 
-  const dragHandlers = {
-    onDragEnter: handleDragEnter,
-    onDragLeave: handleDragLeave,
-    onDragOver: handleDragOver,
-    onDrop: handleDrop,
-  }
+  const dragHandlers = { onDragEnter: handleDragEnter, onDragLeave: handleDragLeave, onDragOver: handleDragOver, onDrop: handleDrop }
 
-  // ── Video playing — invisible drop target ───────────────────────────────
+  // ── Video playing — invisible drop target
   if (fileName && !mpvError) {
     return (
       <div className="absolute inset-0" {...dragHandlers}>
         {isDragOver && (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', zIndex: 10 }}
-          >
-            <div
-              style={{
-                padding: '14px 28px',
-                border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '8px',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'rgba(255,255,255,0.85)',
-                fontSize: '13px',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                fontFamily: 'ui-monospace, monospace',
-              }}
-            >
+          <div className="absolute inset-0 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(20px)', zIndex: 10 }}>
+            <div style={{
+              padding: '20px 40px', borderRadius: 16,
+              border: '2px dashed var(--accent, rgb(59,130,246))',
+              color: '#fff', fontSize: 14, fontWeight: 500,
+              background: 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 8%, transparent)',
+            }}>
               Relâcher pour ouvrir
             </div>
           </div>
@@ -190,222 +176,201 @@ export function DragZone(): React.ReactElement {
     )
   }
 
-  // ── Empty state ─────────────────────────────────────────────────────────
+  // ── Empty state
   return (
-    <div
-      className="absolute inset-0 flex items-center justify-center"
-      {...dragHandlers}
-    >
-      {/* IPC/load error banner */}
+    <div className="absolute inset-0 flex flex-col items-center justify-center" {...dragHandlers}>
+      <style>{CSS}</style>
+
+      {/* Error banner */}
       {loadError && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(239,68,68,0.15)',
-            border: '1px solid rgba(239,68,68,0.35)',
-            borderRadius: '6px',
-            padding: '8px 16px',
-            color: 'rgba(252,165,165,0.9)',
-            fontSize: '12px',
-            fontFamily: 'ui-monospace, monospace',
-            maxWidth: '480px',
-            textAlign: 'center',
-            zIndex: 50,
-          }}
-        >
+        <div style={{
+          position: 'absolute', top: 48, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+          borderRadius: 10, padding: '8px 18px', color: 'rgba(252,165,165,0.9)',
+          fontSize: 12, zIndex: 50, backdropFilter: 'blur(12px)',
+        }}>
           {loadError}
         </div>
       )}
 
       {mpvError ? (
-        // ── mpv not found / launch error ──
-        <div className="text-center" style={{ maxWidth: '400px', padding: '0 24px' }}>
-          <div
-            className="flex items-center justify-center mx-auto"
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              marginBottom: '20px',
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="rgba(248,113,113,1)" strokeWidth="1.5" strokeLinecap="round">
+        <div className="text-center" style={{ maxWidth: 400, padding: '0 24px', animation: 'dz-fade-in 0.3s ease' }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%', margin: '0 auto 20px',
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(248,113,113,0.8)" strokeWidth="1.5" strokeLinecap="round">
               <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
           </div>
-          <p style={{ color: 'rgba(248,113,113,0.9)', fontSize: '14px', fontWeight: 500, marginBottom: '10px' }}>
-            Erreur
-          </p>
+          <p style={{ color: 'rgba(248,113,113,0.9)', fontSize: 14, fontWeight: 500, marginBottom: 10 }}>Erreur</p>
           <p style={{
-            color: 'rgba(255,255,255,0.35)',
-            fontSize: '11px',
-            lineHeight: '1.7',
-            whiteSpace: 'pre-line',
-            fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '6px',
-            padding: '10px 14px',
-          }}>
-            {mpvError}
-          </p>
+            color: 'rgba(255,255,255,0.3)', fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-line',
+            fontFamily: 'ui-monospace, monospace', background: 'rgba(255,255,255,0.02)',
+            borderRadius: 8, padding: '10px 14px',
+          }}>{mpvError}</p>
         </div>
       ) : (
-        // ── Normal drop zone + recent files ──
-        <div className="flex flex-col items-center" style={{ opacity: isDragOver ? 1 : 0.7, transition: 'opacity 0.2s' }}>
-          {/* Circle — pointer-events-none so drag events pass through to parent */}
-          <div
-            className="select-none pointer-events-none"
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              border: isDragOver
-                ? '1px solid rgba(255,255,255,0.45)'
-                : '1px solid rgba(255,255,255,0.14)',
-              background: isDragOver ? 'rgba(255,255,255,0.04)' : 'transparent',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '28px',
-              boxShadow: isDragOver ? '0 0 32px rgba(255,255,255,0.06)' : 'none',
-              transition: 'all 0.25s ease',
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" style={{ marginLeft: '3px' }}>
-              <path
-                d="M6 4.5L20 12L6 19.5V4.5Z"
-                fill={isDragOver ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.28)'}
-                style={{ transition: 'fill 0.25s' }}
-              />
-            </svg>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          opacity: isDragOver ? 1 : 0.85, transition: 'opacity 0.3s',
+          animation: 'dz-fade-in 0.4s ease',
+          maxWidth: 520, width: '100%', padding: '0 32px',
+        }}>
+          {/* App name */}
+          <div style={{
+            color: 'rgba(255,255,255,0.08)', fontSize: 11, fontWeight: 600,
+            letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: 32,
+          }}>
+            Cine-Sync
           </div>
 
-          {/* Open file button — primary action */}
-          <button
-            onClick={handleOpenDialog}
-            style={{
-              padding: '10px 28px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.18)',
-              background: 'rgba(255,255,255,0.07)',
-              color: 'rgba(255,255,255,0.85)',
-              fontSize: '13px',
-              letterSpacing: '0.06em',
-              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-              cursor: 'pointer',
-              marginBottom: '20px',
-              transition: 'background 0.15s, border-color 0.15s',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'
-              ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.3)'
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'
-              ;(e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.18)'
-            }}
-          >
-            Ouvrir un fichier
-          </button>
+          {/* Drop zone area */}
+          <div style={{
+            width: '100%', padding: '40px 24px',
+            borderRadius: 16, border: isDragOver
+              ? '2px dashed var(--accent, rgb(59,130,246))'
+              : '1px solid rgba(255,255,255,0.04)',
+            background: isDragOver
+              ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 5%, transparent)'
+              : 'rgba(255,255,255,0.015)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            transition: 'all 0.3s ease',
+          }}>
+            {/* Play icon */}
+            <div className="select-none pointer-events-none" style={{
+              width: 64, height: 64, borderRadius: 20, marginBottom: 24,
+              background: isDragOver
+                ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 15%, transparent)'
+                : 'rgba(255,255,255,0.03)',
+              border: isDragOver
+                ? '1px solid color-mix(in srgb, var(--accent, rgb(59,130,246)) 30%, transparent)'
+                : '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.3s',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" style={{ marginLeft: 2 }}>
+                <path d="M7 4.5v15l13-7.5z"
+                  fill={isDragOver ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.2)'}
+                  style={{ transition: 'fill 0.3s' }}
+                />
+              </svg>
+            </div>
 
-          {/* Drag hint */}
-          <p
-            className="select-none pointer-events-none"
-            style={{
-              color: isDragOver ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)',
-              fontSize: '11px',
-              letterSpacing: '0.1em',
-              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-              transition: 'color 0.2s',
-            }}
-          >
-            {isDragOver ? 'Relâchez ici' : 'ou glissez des fichiers · MKV · MP4 · AVI · SRT · ASS'}
-          </p>
+            {/* Open button */}
+            <button onClick={handleOpenDialog} className="dz-open-btn" style={{
+              padding: '11px 32px', borderRadius: 10,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 500,
+              cursor: 'pointer', marginBottom: 14,
+            }}>
+              Ouvrir un fichier
+            </button>
+
+            {/* Drag hint */}
+            <p className="select-none pointer-events-none" style={{
+              color: isDragOver ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
+              fontSize: 11, transition: 'color 0.2s',
+            }}>
+              {isDragOver ? 'Relâchez pour ouvrir' : 'ou glissez un fichier ici'}
+            </p>
+          </div>
+
+          {/* Watch Together button on home screen */}
+          {onOpenWatchTogether && (
+            <button
+              onClick={onOpenWatchTogether}
+              className="dz-open-btn"
+              style={{
+                marginTop: 16, padding: '9px 20px', borderRadius: 10,
+                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(255,255,255,0.02)',
+                color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+              </svg>
+              Watch Together
+            </button>
+          )}
 
           {/* Recent files */}
           {recentFiles.length > 0 && (
-            <div style={{ marginTop: '36px', width: '100%', maxWidth: '460px' }}>
-              <div
-                className="select-none pointer-events-none"
-                style={{
-                  color: 'rgba(255,255,255,0.25)',
-                  fontSize: '10px',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  fontFamily: 'ui-monospace, monospace',
-                  marginBottom: '10px',
-                  textAlign: 'center',
-                }}
-              >
-                Fichiers récents
+            <div style={{ marginTop: 28, width: '100%' }}>
+              <div className="select-none pointer-events-none" style={{
+                color: 'rgba(255,255,255,0.2)', fontSize: 10, fontWeight: 600,
+                letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10,
+              }}>
+                Reprendre
               </div>
-              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                {recentFiles.map((file) => (
-                  <button
-                    key={file.filePath}
-                    onClick={() => loadPlaylist([file.filePath])}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }}
-                  >
-                    {/* Play icon */}
-                    <svg width="14" height="14" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-                      <path d="M8 5.5L18 12L8 18.5V5.5Z" fill="rgba(255,255,255,0.2)" />
-                    </svg>
-                    {/* File info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {recentFiles.slice(0, 5).map((file, i) => {
+                  const progressPct = file.duration > 0 ? Math.min((file.position / file.duration) * 100, 100) : 0
+                  return (
+                    <button
+                      key={file.filePath}
+                      onClick={() => loadPlaylist([file.filePath])}
+                      className="dz-recent-card"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        width: '100%', padding: '10px 12px', borderRadius: 10,
+                        border: '1px solid rgba(255,255,255,0.03)', background: 'rgba(255,255,255,0.02)',
+                        cursor: 'pointer', textAlign: 'left', position: 'relative', overflow: 'hidden',
+                        animationDelay: `${i * 60}ms`, animation: 'dz-fade-in 0.3s ease backwards',
+                      }}
+                    >
+                      {/* Progress bar at bottom */}
                       <div style={{
-                        color: 'rgba(255,255,255,0.7)',
-                        fontSize: '12px',
-                        fontFamily: 'ui-monospace, monospace',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        position: 'absolute', bottom: 0, left: 0, height: 2,
+                        width: `${progressPct}%`,
+                        background: 'var(--accent-muted, rgba(59,130,246,0.5))',
+                        borderRadius: '0 1px 0 0',
+                      }} />
+
+                      {/* Play icon */}
+                      <div className="dz-play-icon" style={{
+                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: 'rgba(255,255,255,0.04)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'rgba(255,255,255,0.15)', opacity: 0.6,
+                        transition: 'all 0.2s',
                       }}>
-                        {file.fileName}
+                        <svg width="12" height="12" viewBox="0 0 24 24">
+                          <path d="M8 5.5L18 12L8 18.5V5.5Z" fill="currentColor" />
+                        </svg>
                       </div>
+
+                      {/* File info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: 500,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>
+                          {file.fileName}
+                        </div>
+                        <div style={{
+                          color: 'rgba(255,255,255,0.2)', fontSize: 10, marginTop: 2,
+                          fontFamily: 'ui-monospace, monospace',
+                        }}>
+                          {formatDuration(file.position)} / {formatDuration(file.duration)}
+                        </div>
+                      </div>
+
+                      {/* Time ago */}
                       <div style={{
-                        color: 'rgba(255,255,255,0.25)',
-                        fontSize: '10px',
-                        fontFamily: 'ui-monospace, monospace',
-                        marginTop: '2px',
+                        color: 'rgba(255,255,255,0.12)', fontSize: 10,
+                        fontFamily: 'ui-monospace, monospace', flexShrink: 0,
                       }}>
-                        {formatDuration(file.position)} / {formatDuration(file.duration)}
+                        {formatTimeAgo(file.timestamp)}
                       </div>
-                    </div>
-                    {/* Time ago */}
-                    <div style={{
-                      color: 'rgba(255,255,255,0.15)',
-                      fontSize: '10px',
-                      fontFamily: 'ui-monospace, monospace',
-                      flexShrink: 0,
-                    }}>
-                      {formatTimeAgo(file.timestamp)}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}

@@ -4,7 +4,7 @@ import { app } from 'electron'
 import * as https from 'https'
 
 const API_BASE = 'https://api.opensubtitles.com/api/v1'
-const API_KEY = process.env.OPENSUBTITLES_API_KEY || ''
+const API_KEY = process.env.OPENSUBTITLES_API_KEY ?? ''
 const USER_AGENT = 'CineSync v0.1.0'
 
 interface SubtitleResult {

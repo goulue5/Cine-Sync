@@ -6,6 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      'process.env.OPENSUBTITLES_API_KEY': JSON.stringify(process.env.OPENSUBTITLES_API_KEY || ''),
+    },
     build: {
       rollupOptions: {
         input: {

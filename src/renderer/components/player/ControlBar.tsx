@@ -78,13 +78,11 @@ function ControlButton({ onClick, disabled, label, title, children, size = 36 }:
 /* ── Component ────────────────────────────────────────────────────────── */
 
 interface ControlBarProps {
-  onToggleSubtitles?: () => void
   onToggleWatchTogether?: () => void
-  subtitlesOpen?: boolean
   watchTogetherOpen?: boolean
 }
 
-export function ControlBar({ onToggleSubtitles, onToggleWatchTogether, subtitlesOpen, watchTogetherOpen }: ControlBarProps): React.ReactElement {
+export function ControlBar({ onToggleWatchTogether, watchTogetherOpen }: ControlBarProps): React.ReactElement {
   const isPlaying = usePlayerStore(s => s.isPlaying)
   const fileName = usePlayerStore(s => s.fileName)
   const settingsOpen = usePlayerStore(s => s.settingsOpen)
@@ -216,32 +214,6 @@ export function ControlBar({ onToggleSubtitles, onToggleWatchTogether, subtitles
 
         {/* ── Right: tool buttons ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {/* Subtitles */}
-          {fileName && onToggleSubtitles && (
-            <button
-              onClick={onToggleSubtitles}
-              aria-label="Sous-titres"
-              title="Sous-titres (S)"
-              style={{
-                width: 34, height: 34, borderRadius: 10,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: subtitlesOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)',
-                background: subtitlesOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent',
-                border: 'none', cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
-              }}
-              onMouseEnter={e => { if (!subtitlesOpen) { e.currentTarget.style.color = 'rgba(255,255,255,0.9)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)' } }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = subtitlesOpen ? 'var(--accent, rgb(59,130,246))' : 'rgba(255,255,255,0.4)'
-                e.currentTarget.style.background = subtitlesOpen ? 'color-mix(in srgb, var(--accent, rgb(59,130,246)) 12%, transparent)' : 'transparent'
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="M7 12h4M13 12h4M7 16h10" />
-              </svg>
-            </button>
-          )}
-
           {/* Watch Together */}
           {onToggleWatchTogether && (
             <button

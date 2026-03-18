@@ -2,7 +2,6 @@ import { ipcMain, BrowserWindow, dialog } from 'electron'
 import * as os from 'os'
 import * as fs from 'fs'
 import { savePosition, getResumePosition, getRecentFiles } from '../resumeStore'
-import { searchSubtitles, downloadSubtitle, computeFileHash } from '../subtitles/opensubtitles'
 import { WatchTogetherHost, WatchTogetherClient, SyncMessage } from '../sync/watchTogether'
 import { WatchTogetherRelay } from '../sync/watchTogetherRelay'
 
@@ -54,39 +53,6 @@ export function registerMainHandlers(win: BrowserWindow): void {
       return { content, fileName: filePath.split('/').pop() ?? filePath.split('\\').pop() ?? 'subtitle' }
     } catch (err) {
       console.error('[subs] read error:', err)
-      throw err
-    }
-  })
-
-  // ── Subtitle search (OpenSubtitles) ──────────────────────────────────
-  ipcMain.handle('subs:search', async (_e, query: string, filePath?: string) => {
-    try {
-      let hash: string | undefined
-      if (filePath) {
-        hash = await computeFileHash(filePath)
-      }
-      return await searchSubtitles(query, ['fr', 'en'], hash || undefined)
-    } catch (err) {
-      console.error('[subs] search error:', err)
-      return []
-    }
-  })
-
-  ipcMain.handle('subs:download', async (_e, fileId: number) => {
-    try {
-      const result = await downloadSubtitle(fileId)
-      // Read the downloaded file and convert to VTT
-      let content = fs.readFileSync(result.filePath, 'utf8')
-      if (result.filePath.toLowerCase().endsWith('.srt')) {
-        content = 'WEBVTT\n\n' + content
-          .replace(/\r\n/g, '\n')
-          .replace(/^\d+\s*$/gm, '')
-          .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-          .trim()
-      }
-      return { ...result, vttContent: content }
-    } catch (err) {
-      console.error('[subs] download error:', err)
       throw err
     }
   })
@@ -292,7 +258,7 @@ export function unregisterMainHandlers(): void {
     'resume:getPosition', 'resume:savePosition',
     'history:getRecent',
     'dialog:openSubtitle', 'dialog:openFiles',
-    'subs:readFile', 'subs:search', 'subs:download',
+    'subs:readFile',
     'sync:host', 'sync:join', 'sync:send', 'sync:sendChat', 'sync:sendState', 'sync:getLocalIP', 'sync:stop', 'sync:status',
     'relay:create', 'relay:join',
   ]

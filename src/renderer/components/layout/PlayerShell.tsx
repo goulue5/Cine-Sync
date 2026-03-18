@@ -7,7 +7,6 @@ import { ControlBar } from '../player/ControlBar'
 import { SettingsPanel } from '../player/SettingsPanel'
 import { OsdNotification, useOsd } from '../player/OsdNotification'
 import { MediaInfoPanel } from '../player/MediaInfoPanel'
-import { SubtitleSearchPanel } from '../player/SubtitleSearchPanel'
 import { WatchTogetherPanel } from '../player/WatchTogetherPanel'
 
 const CONTROLS_HIDE_DELAY = 3000
@@ -20,7 +19,6 @@ export function PlayerShell(): React.ReactElement {
   const setSettingsOpen = usePlayerStore(s => s.setSettingsOpen)
   const osdShow = useOsd((s) => s.show)
   const [mediaInfoOpen, setMediaInfoOpen] = useState(false)
-  const [subSearchOpen, setSubSearchOpen] = useState(false)
   const [syncOpen, setSyncOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -149,17 +147,11 @@ export function PlayerShell(): React.ReactElement {
         case 'KeyI':
           setMediaInfoOpen((v) => !v)
           break
-        case 'KeyS':
-          if (usePlayerStore.getState().fileName) {
-            setSubSearchOpen((v) => !v)
-          }
-          break
         case 'KeyW':
           setSyncOpen((v) => !v)
           break
         case 'Escape':
           if (syncOpen) setSyncOpen(false)
-          else if (subSearchOpen) setSubSearchOpen(false)
           else if (mediaInfoOpen) setMediaInfoOpen(false)
           else if (settingsOpen) setSettingsOpen(false)
           else if (isFullscreen) window.mpvBridge.windowMaximize()
@@ -169,7 +161,7 @@ export function PlayerShell(): React.ReactElement {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showControls, settingsOpen, setSettingsOpen, mediaInfoOpen, subSearchOpen, syncOpen, isFullscreen, osdShow])
+  }, [showControls, settingsOpen, setSettingsOpen, mediaInfoOpen, syncOpen, isFullscreen, osdShow])
 
   return (
     <div
@@ -193,11 +185,6 @@ export function PlayerShell(): React.ReactElement {
       {/* Media info overlay */}
       {mediaInfoOpen && fileName && (
         <MediaInfoPanel onClose={() => setMediaInfoOpen(false)} />
-      )}
-
-      {/* Subtitle search */}
-      {subSearchOpen && fileName && (
-        <SubtitleSearchPanel onClose={() => setSubSearchOpen(false)} />
       )}
 
       {/* Watch Together */}
@@ -292,9 +279,7 @@ export function PlayerShell(): React.ReactElement {
         }}
       >
         <ControlBar
-          onToggleSubtitles={() => { if (fileName) setSubSearchOpen(v => !v) }}
           onToggleWatchTogether={() => setSyncOpen(v => !v)}
-          subtitlesOpen={subSearchOpen}
           watchTogetherOpen={syncOpen}
         />
       </div>

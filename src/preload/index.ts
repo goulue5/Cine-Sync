@@ -19,10 +19,6 @@ const mpvBridge = {
   // ── Subtitle operations ─────────────────────────────────────────────
   readSubtitleFile: (filePath: string): Promise<{ content: string; fileName: string }> =>
     ipcRenderer.invoke('subs:readFile', filePath),
-  searchSubtitles: (query: string, filePath?: string) =>
-    ipcRenderer.invoke('subs:search', query, filePath),
-  downloadSubtitle: (fileId: number): Promise<{ filePath: string; fileName: string; vttContent: string }> =>
-    ipcRenderer.invoke('subs:download', fileId),
 
   // ── Watch Together (LAN) ────────────────────────────────────────────
   syncHost: (port?: number) => ipcRenderer.invoke('sync:host', port),
